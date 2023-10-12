@@ -3,14 +3,14 @@ library(tidyverse)
 
 inflow_targets_file <- 
   
-met_target_file <- "https://s3.flare-forecast.org/targets/fcre_v2/fcre/observed-met_fcre.csv"
+  met_target_file <- "https://s3.flare-forecast.org/targets/fcre_v2/fcre/observed-met_fcre.csv"
 
 horizon <- 35
 reference_datetime <- Sys.Date()  
 ensemble_members <- 31
 
 inflow_targets <- t
-  
+
 inflow_hist_dates <- tibble(datetime = seq(min(inflow_targets$datetime), max(inflow_targets$datetime), by = "1 day"))
 
 filled_targets_long <- inflow_targets |> 
@@ -124,7 +124,7 @@ forecast_flow_df <- flow_predicted |>
   mutate(variable = "flow_cms_mean") |> 
   na.omit() |> 
   arrange(datetime, parameter) 
-  
+
 
 ####
 
@@ -209,12 +209,13 @@ forecast_df <- NULL
 
 for(i in 1:length(variables)){
   
-s3 <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/parquet/duration=P1D/variable={variables[k]}/model_id=inflow_aed/reference_date={reference_date}"),
-                       endpoint_override = "https://renc.osn.xsede.org")
-
-df <- arrow::open_dataset(s3) |> collect()
-
-forecast_df <- bind_rows(forecast_df, df)
+  s3 <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/parquet/duration=P1D/variable={variables[k]}/model_id=inflow_aed/reference_date={reference_date}"),
+                         endpoint_override = "https://renc.osn.xsede.org")
+  
+  df <- arrow::open_dataset(s3) |> filter(site_id == "tubr") |> collect()
+  
+  forecast_df <- bind_rows(forecast_df, df)
+  
 }
 
 VARS <- c("parameter", "datetime", "FLOW", "TEMP", "SALT",
