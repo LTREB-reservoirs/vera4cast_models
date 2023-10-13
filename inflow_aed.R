@@ -177,16 +177,21 @@ forecast_temp_df <- temp_predicted |>
 
 forecast_df <- bind_rows(forecast_nutrient_df, forecast_flow_df, forecast_temp_df) |> 
   mutate(project_id = "vera4cast",
-         model_id = "inflow_aed",
-         family = "enemble",
+         model_id = "inflow_gefsClimAED",
+         family = "ensemble",
          site_id = "tubr",
-         duration = "P1D") |> 
-  filter(datetime > reference_datetime)
+         duration = "P1D",
+         depth_m = NA,
+         datetime = lubridate::as_datetime(datetime),
+         reference_datetime = lubridate::as_datetime(reference_datetime)) |> 
+  filter(datetime >= reference_datetime)
 
 ggplot(forecast_df, aes(x = datetime, y = prediction, group= parameter)) + 
   geom_line() + facet_wrap(~variable, scale = "free")
 
-file_name <- paste0("inflow_gefsClimAED-",Sys.Date(),"csv.gz")
+file_name <- paste0("inflow_gefsClimAED-",Sys.Date(),".csv.gz")
+
+readr::write_csv(forecast_df, file_name)
 
 vera4castHelpers::submit(file_name,first_submission = FALSE)
 
