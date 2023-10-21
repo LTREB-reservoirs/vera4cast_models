@@ -1,9 +1,9 @@
 ### Forecast nutrients
 library(tidyverse)
 
-inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/duration=P1D/daily-inflow-targets.csv.gz"
+inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"
   
-met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/duration=P1D/daily-met-targets.csv.gz"
+met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 35
 reference_datetime <- Sys.Date()  
