@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
 
 
-name: baseline-forecasts
+name: aed-inflow
 
 jobs:
-  docker:
+  inflow:
     runs-on: ubuntu-latest
     container: rqthomas/vera-rocker:latest
     steps:
