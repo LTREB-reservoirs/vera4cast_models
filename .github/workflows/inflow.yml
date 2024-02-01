@@ -19,3 +19,7 @@ jobs:
         shell: Rscript {0}
         run: |
           source("inflow_aed.R")
+
+      - name: Healthcheck
+        run: |
+          curl -m 10 --retry 5 https://hc-ping.com/abe344f0-749f-4a00-aab6-0f3c67d322e2
