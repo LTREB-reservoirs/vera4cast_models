@@ -6,7 +6,7 @@ inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 35
-reference_datetime <- Sys.Date()  
+reference_datetime <- Sys.Date() - 1  
 ensemble_members <- 31
 
 inflow_targets <- read_csv(inflow_targets_file, show_col_types = FALSE)
