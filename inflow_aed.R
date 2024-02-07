@@ -6,7 +6,7 @@ inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 35
-reference_datetime <- Sys.Date() - 1  
+reference_datetime <- Sys.Date()
 ensemble_members <- 31
 
 inflow_targets <- read_csv(inflow_targets_file, show_col_types = FALSE)
@@ -79,13 +79,19 @@ df_met_precip <- df_met |>
          twentyday = zoo::rollsum(precip, k = 20, align = "right", fill = NA)) |> 
   rename(datetime = date)
 
-df <- RopenMeteo::get_ensemble_forecast(
-  latitude = 37.30,
-  longitude = -79.83,
-  forecast_days = horizon,
-  past_days = 20,
-  model = "gfs_seamless",
-  variables = c("temperature_2m","precipitation"))
+# df <- RopenMeteo::get_ensemble_forecast(
+#   latitude = 37.30,
+#   longitude = -79.83,
+#   forecast_days = horizon,
+#   past_days = 20,
+#   model = "gfs_seamless",
+#   variables = c("temperature_2m","precipitation"))
+
+df <- arrow::open_dataset('s3://anonymous@drivers/noaa/gefs-v12-reprocess/stage2/parquet?endpoint_override=s3.flare-forecast.org') |> 
+  filter(reference_datetime == reference_datetime, 
+         site_id == 'fcre',
+         variable == 'air_temperature' | variable == 'precipitation_flux') |> 
+  collect()
 
 inflow_merged_precip <- inflow_targets |> 
   filter(variable == "Flow_cms_mean" & datetime > lubridate::as_date("2022-07-01") & datetime < lubridate::as_date("2023-06-01")) |> 
@@ -97,10 +103,10 @@ inflow_merged_precip <- inflow_targets |>
          season = as.factor(season))
 
 forecast_met <- df |> 
-  filter(variable == "precipitation" ) |> 
+  filter(variable == "precipitation_flux" ) |> 
   mutate(date = lubridate::as_date(datetime)) |> 
-  summarise(precip = sum(prediction, na.rm = TRUE), .by = c("date", "ensemble")) |> 
-  group_by(ensemble) |> 
+  summarise(precip = sum(prediction, na.rm = TRUE), .by = c("date", "parameter")) |> 
+  group_by(parameter) |> 
   mutate(fiveday = RcppRoll::roll_sum(precip, n = 5, fill = NA)) |> 
   rename(datetime = date) |> 
   mutate(month = lubridate::month(datetime),
