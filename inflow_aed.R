@@ -7,6 +7,7 @@ met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targ
 
 horizon <- 35
 reference_datetime <- Sys.Date()  
+noaa_date <- reference_datetime - lubridate::days(1)
 ensemble_members <- 31
 
 inflow_targets <- read_csv(inflow_targets_file, show_col_types = FALSE)
@@ -79,13 +80,48 @@ df_met_precip <- df_met |>
          twentyday = zoo::rollsum(precip, k = 20, align = "right", fill = NA)) |> 
   rename(datetime = date)
 
-df <- RopenMeteo::get_ensemble_forecast(
-  latitude = 37.30,
-  longitude = -79.83,
-  forecast_days = horizon,
-  past_days = 20,
-  model = "gfs_seamless",
-  variables = c("temperature_2m","precipitation"))
+
+met_s3_future <- arrow::s3_bucket(paste0("drivers/noaa/gefs-v12-reprocess/stage2/parquet/0/",noaa_date,"/fcre"),
+                           endpoint_override = "s3.flare-forecast.org",
+                           anonymous = TRUE)
+
+df_future <- arrow::open_dataset(met_s3_future) |> 
+  select(datetime, parameter, variable, prediction) |> 
+  filter(variable %in% c("precipitation_flux","air_temperature")) |> 
+  collect() |> 
+  rename(ensemble = parameter) |> 
+  mutate(variable = ifelse(variable == "precipitation_flux", "precipitation", variable),
+         variable = ifelse(variable == "air_temperature", "temperature_2m", variable))
+
+min_datetime <- min(df_future$datetime)
+
+met_s3_past <- arrow::s3_bucket(paste0("drivers/noaa/gefs-v12-reprocess/stage3/parquet/fcre"),
+                                  endpoint_override = "s3.flare-forecast.org",
+                                  anonymous = TRUE)
+
+past_date <- reference_datetime - lubridate::days(10)
+df_past <- arrow::open_dataset(met_s3_past) |> 
+  select(datetime, parameter, variable, prediction) |> 
+  filter(variable %in% c("precipitation_flux","air_temperature"),
+         ((datetime <= min_datetime  & variable == "precipitation_flux") | 
+           datetime < min_datetime  & variable == "air_temperature"),
+         datetime > past_date) |> 
+  collect() |> 
+  rename(ensemble = parameter) |> 
+  mutate(variable = ifelse(variable == "precipitation_flux", "precipitation", variable),
+         variable = ifelse(variable == "air_temperature", "temperature_2m", variable))
+
+df <- bind_rows(df_future, df_past) |> 
+  arrange(variable, datetime, ensemble)
+
+
+#df <- RopenMeteo::get_ensemble_forecast(
+#  latitude = 37.30,
+#  longitude = -79.83,
+#  forecast_days = horizon,
+#  past_days = 20,
+#  model = "gfs_seamless",
+#  variables = c("temperature_2m","precipitation"))
 
 inflow_merged_precip <- inflow_targets |> 
   filter(variable == "Flow_cms_mean" & datetime > lubridate::as_date("2022-07-01") & datetime < lubridate::as_date("2023-06-01")) |> 
