@@ -6,7 +6,7 @@ inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 34
-reference_datetime <- Sys.Date()  
+reference_datetime <- lubridate::as_date("2024-02-07") #Sys.Date()  
 noaa_date <- reference_datetime - lubridate::days(1)
 ensemble_members <- 31
 
@@ -230,7 +230,7 @@ forecast_df <- bind_rows(forecast_nutrient_df, forecast_flow_df, forecast_temp_d
 ggplot(forecast_df, aes(x = datetime, y = prediction, group= parameter)) + 
   geom_line() + facet_wrap(~variable, scale = "free")
 
-file_name <- paste0("inflow_gefsClimAED-",Sys.Date(),".csv.gz")
+file_name <- paste0("inflow_gefsClimAED-",reference_datetime,".csv.gz")
 
 readr::write_csv(forecast_df, file_name)
 
