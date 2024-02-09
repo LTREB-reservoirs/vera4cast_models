@@ -5,7 +5,7 @@ inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/
   
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
-horizon <- 35
+horizon <-34
 reference_datetime <- Sys.Date()  
 noaa_date <- reference_datetime - lubridate::days(1)
 ensemble_members <- 31
@@ -91,7 +91,8 @@ df_future <- arrow::open_dataset(met_s3_future) |>
   collect() |> 
   rename(ensemble = parameter) |> 
   mutate(variable = ifelse(variable == "precipitation_flux", "precipitation", variable),
-         variable = ifelse(variable == "air_temperature", "temperature_2m", variable))
+         variable = ifelse(variable == "air_temperature", "temperature_2m", variable),
+         prediction = ifelse(variable == "temperature_2m", prediction - 273.15, prediction))
 
 min_datetime <- min(df_future$datetime)
 
@@ -109,7 +110,8 @@ df_past <- arrow::open_dataset(met_s3_past) |>
   collect() |> 
   rename(ensemble = parameter) |> 
   mutate(variable = ifelse(variable == "precipitation_flux", "precipitation", variable),
-         variable = ifelse(variable == "air_temperature", "temperature_2m", variable))
+         variable = ifelse(variable == "air_temperature", "temperature_2m", variable),
+         prediction = ifelse(variable == "temperature_2m", prediction - 273.15, prediction))
 
 df <- bind_rows(df_future, df_past) |> 
   arrange(variable, datetime, ensemble)
@@ -136,18 +138,21 @@ forecast_met <- df |>
   filter(variable == "precipitation" ) |> 
   mutate(date = lubridate::as_date(datetime)) |> 
   summarise(precip = sum(prediction, na.rm = TRUE), .by = c("date", "ensemble")) |> 
+  arrange(date, ensemble) |> 
   group_by(ensemble) |> 
-  mutate(fiveday = RcppRoll::roll_sum(precip, n = 5, fill = NA)) |> 
+  mutate(fiveday = RcppRoll::roll_sum(precip, n = 5, fill = NA,align = "right")) |> 
   rename(datetime = date) |> 
   mutate(month = lubridate::month(datetime),
          season = ifelse(month > 4 & month < 11, "winter", "summer"),
-         month = as.factor(month),
+         #month = as.factor(month),
          season = as.factor(season))
 
-fit1 = lm(observation ~ month + fiveday, inflow_merged_precip)
+fit1 = lm(observation ~ precip + fiveday, inflow_merged_precip)
 summary(fit1)
 
 flow_predicted <- forecast_met |> 
+  mutate(month = as.factor(month)) |> 
+  filter(datetime >= reference_datetime) |> 
   modelr::add_predictions(fit1)
 
 forecast_flow_df <- flow_predicted |> 
@@ -194,7 +199,7 @@ forecast_met <- df |>
          season = as.factor(season))
 
 
-fit1 = lm(observation ~ fiveday + month, inflow_merged_temp)
+fit1 = lm(observation ~ fiveday, inflow_merged_temp)
 summary(fit1)
 
 temp_predicted <-  forecast_met |> 
