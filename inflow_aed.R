@@ -2,7 +2,7 @@
 library(tidyverse)
 
 inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"
-  
+
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 34
@@ -80,9 +80,10 @@ df_met_precip <- df_met |>
          twentyday = zoo::rollsum(precip, k = 20, align = "right", fill = NA)) |> 
   rename(datetime = date)
 
+
 met_s3_future <- arrow::s3_bucket(paste0("drivers/noaa/gefs-v12-reprocess/stage2/parquet/0/",noaa_date,"/fcre"),
-                           endpoint_override = "s3.flare-forecast.org",
-                           anonymous = TRUE)
+                                  endpoint_override = "s3.flare-forecast.org",
+                                  anonymous = TRUE)
 
 df_future <- arrow::open_dataset(met_s3_future) |> 
   select(datetime, parameter, variable, prediction) |> 
@@ -96,15 +97,15 @@ df_future <- arrow::open_dataset(met_s3_future) |>
 min_datetime <- min(df_future$datetime)
 
 met_s3_past <- arrow::s3_bucket(paste0("drivers/noaa/gefs-v12-reprocess/stage3/parquet/fcre"),
-                                  endpoint_override = "s3.flare-forecast.org",
-                                  anonymous = TRUE)
+                                endpoint_override = "s3.flare-forecast.org",
+                                anonymous = TRUE)
 
 past_date <- reference_datetime - lubridate::days(10)
 df_past <- arrow::open_dataset(met_s3_past) |> 
   select(datetime, parameter, variable, prediction) |> 
   filter(variable %in% c("precipitation_flux","air_temperature"),
          ((datetime <= min_datetime  & variable == "precipitation_flux") | 
-           datetime < min_datetime  & variable == "air_temperature"),
+            datetime < min_datetime  & variable == "air_temperature"),
          datetime > past_date) |> 
   collect() |> 
   rename(ensemble = parameter) |> 
@@ -134,7 +135,7 @@ inflow_merged_precip <- inflow_targets |>
          season = as.factor(season))
 
 forecast_met <- df |> 
-  filter(variable == "precipitation_flux" ) |> 
+  filter(variable == "precipitation" ) |> 
   mutate(date = lubridate::as_date(datetime)) |> 
   summarise(precip = sum(prediction, na.rm = TRUE), .by = c("date", "ensemble")) |> 
   arrange(date, ensemble) |> 
