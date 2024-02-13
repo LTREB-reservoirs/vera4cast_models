@@ -6,7 +6,8 @@ inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 34
-reference_datetime <- lubridate::as_date("2024-02-10") #Sys.Date()  
+reference_datetime <- lubridate::as_date("2024-02-11") 
+#reference_datetime <- Sys.Date()  
 noaa_date <- reference_datetime - lubridate::days(1)
 ensemble_members <- 31
 
