@@ -6,8 +6,8 @@ inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/
 met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
 
 horizon <- 34
-#reference_datetime <- lubridate::as_date("2024-02-15") 
-reference_datetime <- Sys.Date()  
+#reference_datetime <- lubridate::as_date("2024-02-25") 
+reference_datetime <- Sys.Date()
 noaa_date <- reference_datetime - lubridate::days(1)
 ensemble_members <- 31
 
@@ -82,8 +82,8 @@ df_met_precip <- df_met |>
   rename(datetime = date)
 
 
-met_s3_future <- arrow::s3_bucket(paste0("drivers/noaa/gefs-v12-reprocess/stage2/parquet/0/",noaa_date,"/fcre"),
-                                  endpoint_override = "s3.flare-forecast.org",
+met_s3_future <- arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2/reference_datetime=",noaa_date,"/site_id=fcre"),
+                                  endpoint_override = "renc.osn.xsede.org",
                                   anonymous = TRUE)
 
 df_future <- arrow::open_dataset(met_s3_future) |> 
@@ -97,8 +97,8 @@ df_future <- arrow::open_dataset(met_s3_future) |>
 
 min_datetime <- min(df_future$datetime)
 
-met_s3_past <- arrow::s3_bucket(paste0("drivers/noaa/gefs-v12-reprocess/stage3/parquet/fcre"),
-                                endpoint_override = "s3.flare-forecast.org",
+met_s3_past <- arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage3/site_id=fcre"),
+                                endpoint_override = "renc.osn.xsede.org",
                                 anonymous = TRUE)
 
 past_date <- reference_datetime - lubridate::days(10)
