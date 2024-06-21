@@ -18,7 +18,7 @@ jobs:
       - name: Generate forecasts
         shell: Rscript {0}
         run: |
-          source("inflow_aed.R")
+          source("model_code/inflow_aed/inflow_aed.R")
 
       - name: Healthcheck
         run: |
