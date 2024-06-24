@@ -92,12 +92,15 @@ forecast_file <- paste(theme, date, forecast_name, sep = '-')
 forecast_file_abs_path <- paste0("./model_output/fable_NNETAR_focal/",forecast_file)
 
 # write to file
+print('Writing File...')
+
 if (!file.exists("./model_output/fable_NNETAR_focal")){
   dir.create("./model_output/fable_NNETAR_focal")
 }
 write.csv(prediction_df, forecast_file_abs_path, row.names = FALSE)
 
 # validate
+print('Validating File...')
 vera4castHelpers::forecast_output_validator(forecast_file_abs_path)
 vera4castHelpers::submit(forecast_file_abs_path, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
 
