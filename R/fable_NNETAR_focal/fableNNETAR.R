@@ -18,9 +18,10 @@ fableNNETAR <- function(data, target_var, reference_datetime, forecast_horizon){
   df <- data %>%
     select(-depth_m, -variable) %>% 
     as_tsibble(key = site_id, index = datetime) |> 
-    tsibble::fill_gaps(.full = TRUE) 
-  
-  df$observation <- na.locf(df$observation, fromLast = TRUE)
+    tsibble::fill_gaps(.full = TRUE) |> 
+    group_by(site_id) |> 
+    mutate(observation = na.locf(observation, fromLast = FALSE)) |> 
+    ungroup()
   
   #df <- tsibble::fill_gaps(df, .full = TRUE)
   
