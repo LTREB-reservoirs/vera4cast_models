@@ -26,7 +26,7 @@ sapply(paste0("./R/fdom_dwh/", helper.functions),source,.GlobalEnv)
 
 #### set function inputs
 ## CHANGE FIRST TWO
-forecast_date <- ymd("2024-07-28")
+forecast_date <- Sys.Date() - lubridate::days(1)
 site <- "fcre"
 forecast_depths <- 'focal'
 
@@ -66,6 +66,11 @@ forecast_output <- generate_fDOM_forecast(forecast_date = forecast_date,
                        project_id = project_id, 
                        calibration_start_date = calibration_start_date )
 
+doc_output <- forecast_output |> 
+  mutate(variable = 'DOC_mgL_sample',
+         prediction = ((0.2697*prediction) + 0.4675))
+
+fdom_doc_output <- dplyr::bind_rows(forecast_output, doc_output)
 
 # Write the file locally
 forecast_file_abs_path <- paste0("./model_output/fdom_dwh/", model_id, "_", site, "_", forecast_date, ".csv")
@@ -77,7 +82,7 @@ if (!file.exists("./model_output/fdom_dwh/")){
   dir.create("./model_output/fdom_dwh/")
 }
 
-write.csv(forecast_output, forecast_file_abs_path, row.names = FALSE)
+write.csv(fdom_doc_output, forecast_file_abs_path, row.names = FALSE)
 
 
 ## validate and submit forecast
