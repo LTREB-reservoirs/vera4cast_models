@@ -64,7 +64,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   # Get the weather data
   message('Getting weather')
   
-  met_s3_future <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2",paste0("reference_datetime=",forecast_date),paste0("site_id=",site)),
+  met_s3_future <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2",paste0("reference_datetime=",(forecast_date - lubridate::days(1))),paste0("site_id=",site)),
                                    endpoint_override = 'renc.osn.xsede.org',
                                    anonymous = TRUE)
   
