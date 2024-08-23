@@ -279,11 +279,13 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   
   message('Make forecast dataframe')
   
+  forecast_date_adjust <- forecast_date - lubridate::days(1) 
+  
   #establish forecasted dates
   forecasted_dates <- seq(from = ymd(forecast_date), to = ymd(forecast_date) + forecast_horizon, by = "day")
   
   #get current fdom value
-  curr_fdom <- current_value(dataframe = targets,variable = var, start_date = forecast_date)
+  curr_fdom <- current_value(dataframe = targets,variable = var, start_date = forecast_date_adjust)
   
   #set up df of different initial conditions for IC uncert
   ic_df <- tibble(date = rep(as.Date(forecast_date), times = n_members),

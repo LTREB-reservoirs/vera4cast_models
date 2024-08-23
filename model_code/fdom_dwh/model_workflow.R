@@ -31,7 +31,7 @@ forecast_date <- Sys.Date()
 site <- "fcre"
 forecast_depths <- 'focal'
 
-forecast_horizon <- 16
+forecast_horizon <- 35
 n_members <- 31
 calibration_start_date <- ymd("2022-11-11")
 model_id <- "fdom_AR_dwh"
