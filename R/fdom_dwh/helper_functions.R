@@ -215,7 +215,12 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   
   
   forecast_watertemp <- water_temp_4cast_data |>
-    filter(as.Date(reference_datetime) == forecast_date) 
+    filter(as.Date(reference_datetime) == forecast_date)
+  
+  if (nrow(forecast_watertemp == 0)){
+    message(paste0('Water Temperature forecast for ', forecast_date, ' is not available...stopping model'))
+    stop()
+  }
   
   
   #-------------------------------------
