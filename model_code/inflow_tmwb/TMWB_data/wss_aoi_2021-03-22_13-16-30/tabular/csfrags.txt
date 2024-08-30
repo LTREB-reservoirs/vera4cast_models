@@ -1,0 +1,6 @@
+3|9|15||||"Granite fragments"|250|425|600|"Nonflat"|"Subrounded"||"20010730"|"4207773"
+3|9|15||||"Granite fragments"|250|425|600|"Nonflat"|"Subrounded"||"20010731"|"4207774"
+3|9|15||||"Granite fragments"|250|425|600|"Nonflat"|"Subrounded"||"20010686"|"4207775"
+0.1|1.5|3||||"Granite fragments"|250|425|600|"Nonflat"|"Subrounded"|"Indurated"|"20010732"|"4207778"
+0.1|1.5|3||||"Granite fragments"|250|425|600|"Nonflat"|"Subrounded"|"Indurated"|"20010733"|"4207779"
+0.1|1.5|3||||"Granite fragments"|250|425|600|"Nonflat"|"Subangular"|"Indurated"|"20010680"|"4207767"
