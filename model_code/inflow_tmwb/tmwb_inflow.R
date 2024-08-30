@@ -6,7 +6,7 @@
 #packages
 if (!require("pacman"))install.packages("pacman")
 pacman::p_load(httr, GSODR, curl, elevatr, devtools, sf,
-               raster, soilDB, lattice, lubridate, tidyverse)
+               raster, soilDB, lattice, lubridate, tidyverse, EcoHydRology)
 
 source('./model_code/inflow_tmwb/EcoHydrology_functions.R')
 
