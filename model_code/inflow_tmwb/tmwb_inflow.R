@@ -132,10 +132,13 @@ mybbox = matrix(c(
   myflowgage$declat - degdist, myflowgage$declat + degdist), 
   ncol = 2, byrow = TRUE)
 
-streams=readOGR(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf")) 
-streams=readOGR(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf")) 
+#streams=readOGR(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf")) 
+#streams=readOGR(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf")) 
 
-mysoil <- readOGR(file.path(getwd(), "/model_code/inflow_tmwb/TMWB_data/soils"))
+streams <- sf::read_sf(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf"))
+
+#mysoil <- readOGR(file.path(getwd(), "/model_code/inflow_tmwb/TMWB_data/soils"))
+mysoil <- sf::read_sf(file.path(getwd(), "/model_code/inflow_tmwb/TMWB_data/soils"))
 
 # Associate mukey with cokey from component
 mukey_statement = format_SQL_in_statement(unique(mysoil$mukey))
@@ -152,11 +155,14 @@ mu2ch=merge(mu2co,co2ch)
 mu2chmax=aggregate(mu2ch,list(mu2ch$mukey),max)
 
 #set projection
-proj4string(streams)
-proj4string(mysoil)<- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
+# proj4string(streams)
+# proj4string(mysoil)<- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
+
+st_crs(streams)
+st_crs(mysoil) <- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
 
 #convert to sf
-mysoil <- st_as_sf(mysoil)
+#mysoil <- st_as_sf(mysoil)
 
 # Use the spatial extents from our stream to download elevation raster.
 mydem=get_elev_raster(mysoil, z = 11, src ="aws",clip="bbox")
@@ -254,7 +260,7 @@ TMWBModel<-function(hru_list){
     S[t]=S[t-1]+ExcessOut[t] + Drainage[t]
     Qpred[t]=fcres*S[t]  #Q as calculated from TMWB model (seems to underestimate baseflow without adding in recharge component)
     S[t]<-S[t]-Qpred[t] 
-    print(t)
+    #print(t)
   }
   
   # UPDATE all the calculated vectors for list to be returned from function
