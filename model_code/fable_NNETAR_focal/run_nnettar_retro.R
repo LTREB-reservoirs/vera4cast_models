@@ -47,7 +47,7 @@ for (i in 1:nrow(this_year)) {
   #                              filter(reference_date == this_year$date[i]) %>%
   #                              pull(model_id))
   
-  models_submitted <- unique(s3_forecasts_df)
+  models_submitted <- unique(s3_forecasts_df$model_id)
   
   this_year$exists[i] <- ifelse(challenge_model_name %in% models_submitted,T,F)
   
