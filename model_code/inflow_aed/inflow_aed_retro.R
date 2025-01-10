@@ -45,7 +45,5 @@ if (length(rerun_dates) != 0){ ## CHECK IF THERE ARE MISSING DATES FOUND
   
   
 } else{
-  
   message('NO MISSING FORECASTS FOUND')
-  stop()
 }
