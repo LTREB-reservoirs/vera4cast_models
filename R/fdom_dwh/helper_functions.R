@@ -64,7 +64,8 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   # Get the weather data
   message('Getting weather')
 
-  noaa_date <- forecast_date - lubridate::days(1)
+  #noaa_date <- forecast_date - lubridate::days(1)
+  noaa_date <- forecast_date
   print(paste0('NOAA data from: ',noaa_date))
   
   met_s3_future <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2",paste0("reference_datetime=",noaa_date),paste0("site_id=",site)),
@@ -149,15 +150,15 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   if (site == 'fcre'){
     
     #water_temp_4cast_new_url <- "s3://anonymous@bio230121-bucket01/vera4cast/forecasts/parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean?endpoint_override=renc.osn.xsede.org"
-    fcre_reforecast <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/forecasts/parquet/site_id=fcre/model_id=glm_flare_v1/"),
+    fcre_reforecast <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/forecasts/parquet/site_id=fcre/model_id=glm_aed_flare_v3/"),
                                         endpoint_override = 'renc.osn.xsede.org',
                                         anonymous = TRUE)
     
     #new_flare_forecasts <- arrow::open_dataset(fcre_reforecast)
     
     df_flare_new <- arrow::open_dataset(fcre_reforecast) |>
-      dplyr::filter(depth == 1.5, 
-                    variable == 'temperature') |> 
+      dplyr::filter(depth == 1.6, 
+                    variable == 'Temp_C_mean') |> 
         # site_id %in% c("fcre"),
         #             model_id == "glm_flare_v1",
         #             depth_m == 1.5) |>
@@ -188,7 +189,8 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
     mutate(variable = "temperature",
            reference_datetime = as.character(reference_datetime),
            site_id = site,
-           model_id = 'test_runs3') |> 
+           model_id = 'test_runs3',
+           depth = 1.5) |> 
     rename(datetime_date = datetime) |> 
     mutate(parameter = as.numeric(parameter)) |> 
     select(reference_datetime, datetime_date, site_id, depth, family, parameter, variable, prediction, model_id)

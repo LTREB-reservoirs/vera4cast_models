@@ -26,8 +26,8 @@ sapply(paste0("./R/fdom_dwh/", helper.functions),source,.GlobalEnv)
 
 #### set function inputs
 ## CHANGE FIRST TWO
-#forecast_date <- Sys.Date() - lubridate::days(1)
-forecast_date <- Sys.Date()
+forecast_date <- Sys.Date() - lubridate::days(1)
+#forecast_date <- Sys.Date()
 site <- "fcre"
 forecast_depths <- 'focal'
 
