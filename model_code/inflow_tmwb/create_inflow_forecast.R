@@ -92,12 +92,13 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
     myflowgage$declat - degdist, myflowgage$declat + degdist), 
     ncol = 2, byrow = TRUE)
   
-  streams <- rgdal::readOGR(paste0(soil_file_dir, "03010101/Shape/NHDFlowline.dbf")) 
-
+  #streams <- rgdal::readOGR(paste0(soil_file_dir, "03010101/Shape/NHDFlowline.dbf")) 
+  streams <- foreign::read.dbf(paste0(soil_file_dir, "03010101/Shape/NHDFlowline.dbf"), as.is = FALSE) 
+  
   #mysoil <- soilDB::mapunit_geom_by_ll_bbox(mybbox)
   #writeOGR(obj=mysoil, dsn="soils", layer="mysoil", driver="ESRI Shapefile")
-  mysoil <- rgdal::readOGR(paste0(soil_file_dir,  "/wss_aoi_2021-03-22_13-16-30/spatial/soilmu_a_aoi.dbf"))
-  
+  #mysoil <- rgdal::readOGR(paste0(soil_file_dir,  "/wss_aoi_2021-03-22_13-16-30/spatial/soilmu_a_aoi.dbf"))
+  mysoil <- foreign::read.dbf(paste0(soil_file_dir,  "/wss_aoi_2021-03-22_13-16-30/spatial/soilmu_a_aoi.dbf"), as.is = FALSE)
   # Associate mukey with cokey from component
   mukey_statement <- soilDB::format_SQL_in_statement(unique(mysoil$MUKEY))
   q_mu2co = paste("SELECT mukey,cokey FROM component WHERE mukey IN ", mukey_statement, sep="")
