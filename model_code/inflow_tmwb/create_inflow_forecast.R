@@ -1,17 +1,17 @@
 # function to use noaa forecasts to drive TWMB watershed model and produce ensemble forecasts for BVR inflows
 
-forecast_date <- Sys.Date()
-inflow_obs <- 'model_output/inflow_tmwb/Flow_calcs_met.csv'
-site_id <- 'bvre'
-noaa_date <- Sys.Date() - lubridate::days(1)
-soil_file_dir <- './model_code/inflow_tmwb/TMWB_data/'
-forecast_start_day <- Sys.Date() - lubridate::days(1)
-output_dir <- 'model_output/inflow_tmwb/'
-inflow_model <- 'tmwb_hw'
-inflow_process_uncertainty = TRUE # true of false (I removed this for my forecasting purposes)
-config = NULL
-s3_mode = FALSE
-bucket = NULL
+# forecast_date <- Sys.Date()
+# inflow_obs <- 'model_output/inflow_tmwb/Flow_calcs_met.csv'
+# site_id <- 'bvre'
+# noaa_date <- Sys.Date() - lubridate::days(1)
+# soil_file_dir <- './model_code/inflow_tmwb/TMWB_data/'
+# forecast_start_day <- Sys.Date() - lubridate::days(1)
+# output_dir <- 'model_output/inflow_tmwb/'
+# inflow_model <- 'tmwb_hw'
+# inflow_process_uncertainty = TRUE # true of false (I removed this for my forecasting purposes)
+# config = NULL
+# s3_mode = FALSE
+# bucket = NULL
 
 create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this case the TWMB output using obs met)
                                  site_id, # 4 digit side code, can come from config
@@ -27,9 +27,9 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
                                  s3_mode = FALSE,
                                  bucket = NULL) {
   
-  if (!require("pacman"))install.packages("pacman")
-  pacman::p_load(httr,EcoHydRology,GSODR,curl,elevatr,raster,soilDB,rgdal,lattice,lubridate, tidyverse)
-  library(magrittr)
+  #if (!require("pacman"))install.packages("pacman")
+  #pacman::p_load(httr,EcoHydRology,GSODR,curl,elevatr,raster,soilDB,rgdal,lattice,lubridate, tidyverse)
+  #library(magrittr)
   
   
   inflow <- readr::read_csv(inflow_obs, col_types = readr::cols()) 
