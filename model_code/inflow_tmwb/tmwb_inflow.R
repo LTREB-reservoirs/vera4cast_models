@@ -136,40 +136,44 @@ mybbox = matrix(c(
   myflowgage$declat - degdist, myflowgage$declat + degdist), 
   ncol = 2, byrow = TRUE)
 
+
+
+############### THIS SECTION WAS CAUSING ISSUES WITH SF PACKAGE AND DIDNT SEEM ESSENTIAL ######
+############### IT WAS REMOVED FROM THIS SECTION AND THE MATCHING SECTION IN create_inflow_forecast() #######
 #streams=readOGR(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf")) 
 #streams=readOGR(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf")) 
 
-streams <- sf::read_sf(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf"))
+#streams <- sf::read_sf(paste0(getwd(), "/model_code/inflow_tmwb/TMWB_data/03010101/Shape/NHDFlowline.dbf"))
 
 #mysoil <- readOGR(file.path(getwd(), "/model_code/inflow_tmwb/TMWB_data/soils"))
-mysoil <- sf::read_sf(file.path(getwd(), "/model_code/inflow_tmwb/TMWB_data/soils"))
+#mysoil <- sf::read_sf(file.path(getwd(), "/model_code/inflow_tmwb/TMWB_data/soils"))
 
-# Associate mukey with cokey from component
-mukey_statement = format_SQL_in_statement(unique(mysoil$mukey))
-q_mu2co = paste("SELECT mukey,cokey FROM component WHERE mukey IN ", mukey_statement, sep="")
-mu2co = SDA_query(q_mu2co)
-
-# Second associate cokey with ksat_r,awc_r,hzdepb_r from chorizon
-cokey_statement = format_SQL_in_statement(unique(mu2co$cokey))
-q_co2ch = paste("SELECT cokey,ksat_r,awc_r,hzdepb_r  FROM chorizon WHERE cokey IN ", cokey_statement, sep="")
-co2ch = SDA_query(q_co2ch)
-
-# Aggregate max values of ksat_r,awc_r, and hzdepb_r
-mu2ch=merge(mu2co,co2ch)
-mu2chmax=aggregate(mu2ch,list(mu2ch$mukey),max)
+# # Associate mukey with cokey from component
+# mukey_statement = format_SQL_in_statement(unique(mysoil$mukey))
+# q_mu2co = paste("SELECT mukey,cokey FROM component WHERE mukey IN ", mukey_statement, sep="")
+# mu2co = SDA_query(q_mu2co)
+# 
+# # Second associate cokey with ksat_r,awc_r,hzdepb_r from chorizon
+# cokey_statement = format_SQL_in_statement(unique(mu2co$cokey))
+# q_co2ch = paste("SELECT cokey,ksat_r,awc_r,hzdepb_r  FROM chorizon WHERE cokey IN ", cokey_statement, sep="")
+# co2ch = SDA_query(q_co2ch)
+# 
+# # Aggregate max values of ksat_r,awc_r, and hzdepb_r
+# mu2ch=merge(mu2co,co2ch)
+# mu2chmax=aggregate(mu2ch,list(mu2ch$mukey),max)
 
 #set projection
 # proj4string(streams)
 # proj4string(mysoil)<- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
 
-st_crs(streams)
-st_crs(mysoil) <- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
+#st_crs(streams)
+#st_crs(mysoil) <- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
 
 #convert to sf
 #mysoil <- st_as_sf(mysoil)
 
 # Use the spatial extents from our stream to download elevation raster.
-mydem=get_elev_raster(mysoil, z = 11, src ="aws",clip="bbox")
+#mydem=get_elev_raster(mysoil, z = 11, src ="aws",clip="bbox")
 
 #view watershed
 # plot(mydem)
@@ -177,7 +181,12 @@ mydem=get_elev_raster(mysoil, z = 11, src ="aws",clip="bbox")
 # points(myflowgage$declon,myflowgage$declat,pch = 24, cex=2, col="blue", bg="red", lwd=2)
 
 # For initializing slopes, we store the summary stats for terrain slope
-slope_sum=summary(terrain(mydem, opt='slope',unit = "radians"))
+#slope_sum=summary(terrain(mydem, opt='slope',unit = "radians"))
+
+##########################################
+
+
+
 
 # 3 Functions to calculate SWE and excess when soil is drying, wetting, and wetting above capacity
 soildrying<-function(AWprev,dP,AWC){
@@ -218,7 +227,7 @@ myflowgage$TMWB$S[1]=0
 myflowgage$fcres=0.3  #typically ranges from 0.2-0.5
 myflowgage$SlopeRad=0.0 
 
-#need to modify a couple of the functions bc EcoHydRology is no longer maintained
+#need to source the functions bc EcoHydRology is no longer maintained
 source("./model_code/inflow_tmwb/EcoHydrology_functions.R")
 
 TMWBModel<-function(hru_list){  
