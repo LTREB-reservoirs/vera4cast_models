@@ -18,13 +18,16 @@ source('./model_code/inflow_tmwb/EcoHydrology_functions.R')
 #url="https://websoilsurvey.sc.egov.usda.gov/DSD/Download/AOI/hdbxgq2us0dl32ysxprivmbf/wss_aoi_2023-03-01_08-53-36.zip"
 #download.file(url,"mysoil.zip") #Note: will probably have to update wss_aoi date if it's been a while - go to wss homepage and click on start wss link on right of page
 #unzip("mysoil.zip")            #zoom in to site, use define aoi tool to select desired area, go to download soils data tab, scroll to bottom of page and click "create download link", right click and copy link address, paste on line 16
-list.files()
+# list.files()
+# 
+# list.files(paste0(getwd(), "/model_code/inflow_tmwb/FCR_wss_aoi_2024-08-09_10-50-55/spatial"),pattern = "shp")
+# list.files(paste0(getwd(), "/model_code/inflow_tmwb/FCR_wss_aoi_2024-08-09_10-50-55/tabular"))
 
-list.files(paste0(getwd(), "/model_code/inflow_tmwb/FCR_wss_aoi_2024-08-09_10-50-55/spatial"),pattern = "shp")
-list.files(paste0(getwd(), "/model_code/inflow_tmwb/FCR_wss_aoi_2024-08-09_10-50-55/tabular"))
+# objects()
+# rm(list=objects())
 
-objects()
-rm(list=objects())
+
+print('SETTING UP SOIL FILES...')
 
 #Using ROANOKE RIVER AT NIAGARA, VA  usgs gage to use as a template (will write over with BVR-specific data) 
 flow_start <- '2020-01-01'
@@ -82,6 +85,7 @@ myflowgage$declon<- -79.81535
 # all_results <- arrow::open_dataset("s3://anonymous@bio230121-bucket01/flare/drivers/met/gefs-v12/stage2?endpoint_override=renc.osn.xsede.org")
 # df <- all_results |> dplyr::collect()
 
+print('SETTING UP MET FILES...')
 ## historic met
 NLDAS <- arrow::open_dataset(arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage3/site_id=",flow_site),
                                    endpoint_override = 'renc.osn.xsede.org',
@@ -283,6 +287,8 @@ TMWBModel<-function(hru_list){
   return(myflowgage)
 }
 
+print('RUNNING NEW TMWB MODEL FUNCTION...')
+
 # Call the new TMWBModel() function 
 TMWBsol=TMWBModel(myflowgage)
 # Convert area from km to m (10^6) and Qpred from mm to m (10^-3) 
@@ -343,7 +349,7 @@ write.csv(inflow_forecast, forecast_file_abs_path, row.names = FALSE)
 
 ## validate and submit forecast
 
-# validate
+# # validate
 print('Validating File...')
 vera4castHelpers::forecast_output_validator(forecast_file_abs_path)
 vera4castHelpers::submit(forecast_file_abs_path, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)

@@ -179,3 +179,164 @@ get_usgs_gage <- function(flowgage_id,begin_date="1979-01-01",end_date="2013-01-
   return(returnlist)
   
 }
+
+Solar <-  function (lat, Jday, Tx, Tn, albedo=0.2, forest=0, slope=0, aspect = 0, units="kJm2d", latUnits = "unknown", printWarn=TRUE) {
+  
+  if ((abs(lat) > pi/2 & latUnits == "unknown") | latUnits == "degrees" ){
+    if (printWarn==TRUE) 
+      lat <- lat*pi/180
+  } else if (latUnits == "unknown"){
+    if (printWarn==TRUE) warning("In Solar(): Input latitude units are not specified and assumed to be radians")
+  }
+  
+  if (units == "kJm2d") convert <- 1 else convert <- 86.4  # can convert to W/m2
+  return( signif((1 - albedo) * (1 - forest) * transmissivity(Tx, Tn) * 
+                   PotentialSolar(lat, Jday) * slopefactor(lat, Jday, slope, aspect) / convert , 5 ))
+}
+
+AtmosphericEmissivity <- function (airtemp, cloudiness, vp=NULL, opt="linear") 
+{
+  if (opt == "Brutsaert") {
+    if(is.null(vp)){ print("To use Brutsaert's 1975 Clear-Sky Emissivity eqn, enter vapor pressure in kPa")
+    } else return((1.24*((vp*10)/(T+273.2))^(1/7)) * (1 - 0.84 * cloudiness) + 
+                    0.84 * cloudiness)
+  } else {
+    return((0.72 + 0.005 * airtemp) * (1 - 0.84 * cloudiness) + 
+             0.84 * cloudiness)
+  }
+}
+
+
+transmissivity<-function(Tx,Tn, A=0.75, C=2.4, opt="1day", JD=NULL){ 	 
+  # fraction of direct solar radiation passing through 
+  # the atmosphere based on the Bristow-Campbell eqn
+  #Tx: maximum daily temperature [C]
+  #Tn: minimum daily temperature [C]
+  if (any(Tx<Tn)) {print("Warning, Tn larger than Tx and generated NAs in the following rows:") 
+    print(which(Tx<Tn))
+  }
+  len<-length(Tx)
+  dT <- (Tx-Tn)  # diurnal temperature range just difference between max and min daily temperature
+  avDeltaT<-vector(length=len)
+  
+  if (opt == "2day"){  ## This is the way Bristow-Campbell originally envisioned it 
+    for (i in 1:(len-1)){
+      dT[i] <- Tx[i] - (Tn[i]+Tn[i+1])/2
+    }  
+  }
+  
+  if (opt == "missingdays" & !is.null(JD)){
+    for (i in 1:len){
+      JDX <- JD[i] + 365
+      JDN <- JD[i] - 365
+      index1 <- which((JD < (JD[i] + 15) & JD > (JD[i] - 15)) | (JD > (JDX - 15)) |	(JD < (JDN + 15)))
+      index2 <- index1[which(index1 > i-14 & index1 < i+15)]
+      avDeltaT[i]<-mean(dT[index2])
+    }	
+  } else if(len<30){ 
+    avDeltaT<-mean(dT)
+  } else {
+    avDeltaT[1:14]<-mean(dT[1:30])
+    avDeltaT[(len-14):len]<-mean(dT[(len-30):len])
+    for (i in 15:(len-15)){
+      avDeltaT[i]<-mean(dT[(i-14):(i+15)])
+    }
+  }
+  B<-0.036*exp(-0.154*avDeltaT)
+  return(A*(1-exp(-B*dT^C)))  
+}
+
+SatVaporDensity <- function(T_C){
+  #	T_C	= Temperature [C]
+  VP <- SatVaporPressure(T_C)
+  return(round(VP/(0.462 * (T_C+273.15)), 4))
+}
+
+SatVaporPressure <- function(T_C){  
+    # saturated vapor pressure at a given temperature (kPa)
+    #T_C: temperature [C]
+    return(0.611 * exp((17.3*T_C)/(237.2+T_C)))
+  }
+
+SatVapPresSlope <-
+  function(temp_C){
+    (2508.3/(temp_C+237.3)^2)*exp(17.3*temp_C/(temp_C+237.3))
+  }
+
+Longwave <- function(emissivity,temp){
+    # daily longwave radiation based on the Sephan-Boltzman equation [kJ m-2 d-1]
+    
+    #emissivity: [-]
+    #temp: temperature of the emitting body [C]
+    
+    SBconstant<-0.00000490 #[kJ m-2 K-4 d-1]
+    
+    tempK<-temp+273.15 #[degrees K]
+    
+    return(emissivity*SBconstant*tempK^4)
+  }
+
+PotentialSolar <- function(lat,Jday){
+    # potential solar radiation at the edge of the atmospher [kJ m-2 d-1]
+    
+    #lat: latitdue [rad]
+    #Jday: Julian date or day of the year [day]
+    
+    # solar declination [rad]
+    dec<-declination(Jday)
+    
+    return(117500*(acos(-tan(dec)*tan(lat))*sin(lat)*sin(dec)+cos(lat)*cos(dec)*sin(acos(tan(dec)*tan(lat))))/pi)
+  }
+
+declination <- function(Jday){
+    # solar declination [rad]
+    #
+    #Jday: Julian date or day of the year [day]
+    #
+    return(0.4102*sin(pi*(Jday-80)/180))
+  }
+
+slopefactor <- function(lat,Jday,slope,aspect){
+  # slopefactor: adjusts solar radiation for land slope and aspect relative to the sun, 1=level ground
+  #lat: latitdue [rad]
+  #Jday: Julian date or day of the year [day]
+  #slope: slope of the ground [rad]
+  #aspect: ground aspect [rad from north]
+  SolAsp <- rep(pi, length(Jday))  # Average Solar aspect is binary - either north (0) or south (pi) for the day
+  SolAsp[which(lat - declination(Jday) < 0)] <- 0   # 
+  SF <- cos(slope) - sin(slope)*cos(aspect-(pi-SolAsp))/tan(solarangle(lat,Jday))
+  SF[which(SF < 0)] <- 0  ## Slope factors less than zero are completely shaded
+  
+  return( SF )
+}
+
+solarangle <- function(lat,Jday){
+    # angle of solar inclination from horizontal at solar noon [rad]
+    
+    #lat: latitdue [rad]
+    #Jday: Julian date or day of the year [day]
+    
+    # solar declination [rad]
+    dec<-declination(Jday)
+    
+    return(asin(sin(lat)*sin(dec)+cos(lat)*cos(dec)*cos(0)))
+  }
+
+NetRad <- function (lat, Jday, Tx, Tn, albedo = 0.18, forest = 0, slope = 0, aspect = 0, airtemp = (Tn+Tx)/2, cloudiness = "Estimate", surfemissivity = 0.97, surftemp=(Tn+Tx)/2, units = "kJm2d", AEparams=list(vp=NULL, opt="linear")) {
+  #  units : kJm3d or Wm2
+  if (cloudiness[1] == "Estimate") {
+    cloudiness <- EstCloudiness(Tx, Tn)
+  }
+  if (units == "kJm2d") convert <- 1 else convert <- 86.4
+  return( signif((Solar(lat, Jday, Tx, Tn, albedo, forest, slope, aspect, printWarn=FALSE) + Longwave(AtmosphericEmissivity(airtemp, cloudiness, AEparams$vp, AEparams$opt),airtemp) - Longwave(surfemissivity, surftemp)) / convert , 5) )
+}
+
+PTpet <- function(Rn, T_C, PTconstant = 1.26){
+    LatentHtEvap <- 2500	# kJ/kg
+    DensityWater <- 1000	# kg/m3
+    PsychConstant <- 0.066	# kPa/K
+    potentialET <- PTconstant * SatVapPresSlope(T_C) * Rn/((SatVapPresSlope(T_C) + PsychConstant) * (LatentHtEvap * DensityWater))
+    potentialET[which(potentialET < 0)] <- 0
+    return(signif(potentialET,2))
+    
+}
