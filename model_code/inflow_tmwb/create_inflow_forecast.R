@@ -86,36 +86,37 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
   myflowgage$flowdata[["flow"]] <- NA
   
   #set coordinates to plot DEM raster
-  degdist=sqrt(myflowgage$area*4)/200
-  mybbox = matrix(c(
-    myflowgage$declon - degdist, myflowgage$declon + degdist, 
-    myflowgage$declat - degdist, myflowgage$declat + degdist), 
-    ncol = 2, byrow = TRUE)
+  # degdist=sqrt(myflowgage$area*4)/200
+  # mybbox = matrix(c(
+  #   myflowgage$declon - degdist, myflowgage$declon + degdist, 
+  #   myflowgage$declat - degdist, myflowgage$declat + degdist), 
+  #   ncol = 2, byrow = TRUE)
   
   #streams <- rgdal::readOGR(paste0(soil_file_dir, "03010101/Shape/NHDFlowline.dbf")) 
-  streams <- foreign::read.dbf(paste0(soil_file_dir, "03010101/Shape/NHDFlowline.dbf"), as.is = FALSE) 
+  #streams <- foreign::read.dbf(paste0(soil_file_dir, "03010101/Shape/NHDFlowline.dbf"), as.is = FALSE) 
   
   #mysoil <- soilDB::mapunit_geom_by_ll_bbox(mybbox)
   #writeOGR(obj=mysoil, dsn="soils", layer="mysoil", driver="ESRI Shapefile")
   #mysoil <- rgdal::readOGR(paste0(soil_file_dir,  "/wss_aoi_2021-03-22_13-16-30/spatial/soilmu_a_aoi.dbf"))
-  mysoil <- foreign::read.dbf(paste0(soil_file_dir,  "/wss_aoi_2021-03-22_13-16-30/spatial/soilmu_a_aoi.dbf"), as.is = FALSE)
+  #mysoil <- foreign::read.dbf(paste0(soil_file_dir,  "/wss_aoi_2021-03-22_13-16-30/spatial/soilmu_a_aoi.dbf"), as.is = FALSE)
+  
   # Associate mukey with cokey from component
-  mukey_statement <- soilDB::format_SQL_in_statement(unique(mysoil$MUKEY))
-  q_mu2co = paste("SELECT mukey,cokey FROM component WHERE mukey IN ", mukey_statement, sep="")
-  mu2co = soilDB::SDA_query(q_mu2co)
+  #mukey_statement <- soilDB::format_SQL_in_statement(unique(mysoil$MUKEY))
+  #q_mu2co = paste("SELECT mukey,cokey FROM component WHERE mukey IN ", mukey_statement, sep="")
+  #mu2co = soilDB::SDA_query(q_mu2co)
   
   # Second associate cokey with ksat_r,awc_r,hzdepb_r from chorizon
-  cokey_statement = soilDB::format_SQL_in_statement(unique(mu2co$cokey))
-  q_co2ch = paste("SELECT cokey,ksat_r,awc_r,hzdepb_r  FROM chorizon WHERE cokey IN ", cokey_statement, sep="")
-  co2ch = soilDB::SDA_query(q_co2ch)
+  #cokey_statement = soilDB::format_SQL_in_statement(unique(mu2co$cokey))
+  #q_co2ch = paste("SELECT cokey,ksat_r,awc_r,hzdepb_r  FROM chorizon WHERE cokey IN ", cokey_statement, sep="")
+ #co2ch = soilDB::SDA_query(q_co2ch)
   
   # Aggregate max values of ksat_r,awc_r, and hzdepb_r
-  mu2ch=merge(mu2co,co2ch)
-  mu2chmax=aggregate(mu2ch,list(mu2ch$mukey),max)
+  #mu2ch=merge(mu2co,co2ch)
+  #mu2chmax=aggregate(mu2ch,list(mu2ch$mukey),max)
   
   #set projection
-  sp::proj4string(streams)
-  sp::proj4string(mysoil) <- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
+  #sp::proj4string(streams)
+  #sp::proj4string(mysoil) <- "+proj=longlat +datum=NAD83 +no_defs +ellps=GRS80 +towgs84=0,0,0"
   
   
   ############ --- CODE CHUNK DOES NOT WORK BUT IS NOT IMPERATIVE FOR CODE TO RUN -----#########
