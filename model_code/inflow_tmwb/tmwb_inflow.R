@@ -31,8 +31,8 @@ print('SETTING UP SOIL FILES...')
 
 #Using ROANOKE RIVER AT NIAGARA, VA  usgs gage to use as a template (will write over with BVR-specific data) 
 flow_start <- '2020-01-01'
-#flow_end <- '2024-01-01'
-flow_end <- as.character(Sys.Date() + lubridate::days(30))
+#flow_end <- '2024-12-31'
+flow_end <- as.character(Sys.Date())
 flow_site <- 'bvre'
 
 myflowgage_id="02056000"
@@ -109,10 +109,10 @@ NLDAS$time <-as.Date(NLDAS$datetime)
 NLDAS$precip_mm <-NLDAS$Rain * 1000 #/ 24
 
 #average by date
-NLDAS <- NLDAS %>% 
-  dplyr::select(time, AirTemp, precip_mm) %>% 
-  group_by(time) %>%
-  rename(mdate=time) %>%
+NLDAS <- NLDAS|>
+  dplyr::select(time, AirTemp, precip_mm)|>
+  group_by(time) |>
+  rename(mdate=time) |>
   summarise(MaxTemp_C = max(AirTemp),
             MinTemp_C = min(AirTemp),
             MeanTemp_C = mean(AirTemp),
@@ -324,12 +324,13 @@ write.csv(QExport, "model_output/inflow_tmwb/Flow_calcs_met.csv", row.names = F)
 ## MAKE INFLOW FORECAST
 message('Generating Inflow Forecast...')
 source('./model_code/inflow_tmwb/create_inflow_forecast.R')
+source('./model_code/inflow_tmwb/inflow_prep.R')
 
 site = 'bvre'
 model_name = 'tmwb_inflow'
 forecast_date <- Sys.Date()
 
-
+## make initial flow and temperature inflow forecast
 inflow_forecast <- create_inflow_forecast(inflow_obs = 'model_output/inflow_tmwb/Flow_calcs_met.csv',
                            site_id = site,
                            model_name = model_name,
@@ -343,8 +344,36 @@ inflow_forecast <- create_inflow_forecast(inflow_obs = 'model_output/inflow_tmwb
                            s3_mode = FALSE,
                            bucket = NULL)
 
-# Write the file locally
-forecast_file_abs_path <- paste0("./model_output/inflow_tmwb/", model_name, "_", site, "_", forecast_date, ".csv")
+## add all other water quality variable inflow forecasts
+inflow_build <- inflow_prep(inflow_forecast)
+
+## format the output to match VERA submission
+forecast_submit <- inflow_build |>
+  #select(-c(Rain, SALT)) |>
+  select(datetime = time, 
+         parameter = ensemble,
+         Flow_cms_mean = FLOW, 
+         Temp_C_mean = TEMP,
+         DO_mgL_mean = OXY_oxy,
+         NH4_ugL_sample = NIT_amm, #using this instead of NH4_ugL
+         NO3NO2_ugL_sample = NIT_nit, #using this instead of NO2NO3_ugL
+         TP_ugL_sample = TP_ugL,
+         SRP_ugL_sample = SRP_ugL,
+         DOC_mgL_sample = DOC_mgL,
+         DIC_mgL_sample = DIC_mgL,
+         DRSI_mgL_sample = SIL_rsi,
+         CH4_umolL_sample = CAR_ch4,
+         Bluegreens_ugL_sample = PHY_cyano,
+         GreenAlgaeCM_ugL_sample = PHY_green) |>
+  pivot_longer(!c(datetime, parameter), names_to = "variable", values_to = "prediction") |>
+  mutate(reference_datetime = forecast_date,
+         model_id = model_name,
+         site_id = site,
+         family = 'ensemble',
+         depth_m = NA,
+         duration = 'P1D',
+         project_id = 'vera4cast') |>
+  select(datetime, reference_datetime, model_id, site_id, parameter, family, prediction, variable, depth_m, duration, project_id)
 
 # write to file
 print('Writing File...')
@@ -353,7 +382,10 @@ if (!file.exists("./model_output/inflow_tmwb/")){
   dir.create("./model_output/inflow_tmwb/")
 }
 
-write.csv(inflow_forecast, forecast_file_abs_path, row.names = FALSE)
+# Write the file locally
+forecast_file_abs_path <- paste0("./model_output/inflow_tmwb/", model_name, "_", site, "_", forecast_date, ".csv")
+
+write.csv(forecast_submit, forecast_file_abs_path, row.names = FALSE)
 
 
 ## validate and submit forecast
