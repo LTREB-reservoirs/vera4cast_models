@@ -158,8 +158,8 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
     
     print(ens)
     
-    curr_met_daily <- noaa_future_met %>%
-      dplyr::mutate(mdate = lubridate::as_date(date)) %>%
+    curr_met_daily <- noaa_future_met |>
+      dplyr::mutate(mdate = lubridate::as_date(date)) |> 
       dplyr::filter(ensemble == ens) |> 
       dplyr::mutate(FLOW = NA,
                     TEMP = NA) |> 
@@ -292,19 +292,19 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
     #change mdate col back to time
     curr_met_daily <- rename(curr_met_daily, time = mdate)
     
-    curr_met_daily <- curr_met_daily %>%
+    curr_met_daily <- curr_met_daily |>
       dplyr::mutate(FLOW = ifelse(FLOW < 0.0, 0.0, FLOW))
     
-    curr_met_daily <- curr_met_daily %>%
-      dplyr::mutate(SALT = 0.0) %>%
-      dplyr::select(time, FLOW, TEMP, SALT, AirTemp, Rain) %>% #, OXY_oxy
-      dplyr::mutate_at(dplyr::vars(c("FLOW", "TEMP", "SALT")), list(~round(., 4))) %>% #,"OXY_oxy"
+    curr_met_daily <- curr_met_daily |>
+      dplyr::mutate(SALT = 0.0) |>
+      dplyr::select(time, FLOW, TEMP, SALT, AirTemp, Rain) |> #, OXY_oxy
+      dplyr::mutate_at(dplyr::vars(c("FLOW", "TEMP", "SALT")), list(~round(., 4))) |> #,"OXY_oxy"
       dplyr::mutate(type = "inflow",
-                    inflow_num = 1) %>%
+                    inflow_num = 1) |>
       slice(-1)
     
-    curr_met_daily_output <- curr_met_daily %>% #this assumes that outflow = inflow, but might want to think about this a bit
-      dplyr::select(time, FLOW, TEMP) %>% #, OXY_oxy
+    curr_met_daily_output <- curr_met_daily |> #this assumes that outflow = inflow, but might want to think about this a bit
+      dplyr::select(time, FLOW, TEMP) |> #, OXY_oxy
       dplyr::mutate(type = "outflow",
                     outflow_num = 1)
     
@@ -332,21 +332,22 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
   } # end noaa ensemble for loop 
   
   ## format the output to match VERA submission
-  forecast_submit <- forecast_df |> 
-    select(-Rain, -SALT) |> 
-    rename(datetime = time, Flow_cms_mean = FLOW, Temp_C_mean = TEMP) |> 
-    pivot_longer(!c(datetime, ensemble), names_to = "variable", values_to = "prediction") |> 
-    mutate(reference_datetime = forecast_date, 
-           model_id = model_name,
-           site_id = site_id,
-           parameter = ensemble,
-           family = 'ensemble', 
-           depth_m = NA, 
-           duration = 'P1D',
-           project_id = 'vera4cast'
-           ) |> 
-    select(datetime, reference_datetime, model_id, site_id, parameter, family, prediction, variable, depth_m, duration, project_id)
+  # forecast_submit <- forecast_df |> 
+  #   select(-Rain, -SALT) |> 
+  #   rename(datetime = time, Flow_cms_mean = FLOW, Temp_C_mean = TEMP) |> 
+  #   pivot_longer(!c(datetime, ensemble), names_to = "variable", values_to = "prediction") |> 
+  #   mutate(reference_datetime = forecast_date, 
+  #          model_id = model_name,
+  #          site_id = site_id,
+  #          parameter = ensemble,
+  #          family = 'ensemble', 
+  #          depth_m = NA, 
+  #          duration = 'P1D',
+  #          project_id = 'vera4cast'
+  #          ) |> 
+  #   select(datetime, reference_datetime, model_id, site_id, parameter, family, prediction, variable, depth_m, duration, project_id)
+  # 
   
-  
-  return(forecast_submit)
+  return(forecast_df)
+  #return(forecast_submit)
 } #end function
