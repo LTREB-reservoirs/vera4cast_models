@@ -330,8 +330,8 @@ site = 'bvre'
 model_name = 'tmwb_inflow'
 
 for (i in seq.Date(as.Date('2025-02-01'), as.Date('2025-03-20'), by = 'days')){
-print(i)
-forecast_date <- i
+forecast_date <- as.Date(i)
+print(forecast_date)
 
 ## make initial flow and temperature inflow forecast
 inflow_forecast <- create_inflow_forecast(inflow_obs = 'model_output/inflow_tmwb/Flow_calcs_met.csv',
