@@ -328,16 +328,19 @@ source('./model_code/inflow_tmwb/inflow_prep.R')
 
 site = 'bvre'
 model_name = 'tmwb_inflow'
-forecast_date <- Sys.Date()
+
+for (i in seq.Date(as.Date('2025-02-01'), as.Date('2025-03-20'), by = 'days')){
+print(i)
+forecast_date <- i
 
 ## make initial flow and temperature inflow forecast
 inflow_forecast <- create_inflow_forecast(inflow_obs = 'model_output/inflow_tmwb/Flow_calcs_met.csv',
                            site_id = site,
                            model_name = model_name,
                            forecast_date = forecast_date,
-                           noaa_date = Sys.Date() - lubridate::days(1), # date for NOAA forecasts
+                           noaa_date = forecast_date - lubridate::days(1), # date for NOAA forecasts
                            soil_file_dir = './model_code/inflow_tmwb/TMWB_data/', # directory where you store your previously downloaded soil files
-                           forecast_start_day = Sys.Date() - lubridate::days(1), # day forecasts start
+                           forecast_start_day = forecast_date - lubridate::days(1), # day forecasts start
                            output_dir = 'model_output/inflow_tmwb/', # where you want to store the inflow forecast files which are created by this function
                            inflow_process_uncertainty = TRUE, # true of false (I removed this for my forecasting purposes)
                            config = NULL,
@@ -395,3 +398,4 @@ print('Validating File...')
 vera4castHelpers::forecast_output_validator(forecast_file_abs_path)
 vera4castHelpers::submit(forecast_file_abs_path, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
 
+}
