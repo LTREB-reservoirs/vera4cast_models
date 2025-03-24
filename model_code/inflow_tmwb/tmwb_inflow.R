@@ -328,8 +328,9 @@ source('./model_code/inflow_tmwb/inflow_prep.R')
 
 site = 'bvre'
 model_name = 'tmwb_inflow'
+forecast_date <- Sys.Date()
 
-for (i in seq.Date(as.Date('2025-02-01'), as.Date('2025-03-20'), by = 'days')){
+for (i in seq.Date(as.Date('2025-03-22'), as.Date('2025-03-24'), by = 'days')){
 forecast_date <- as.Date(i)
 print(forecast_date)
 
