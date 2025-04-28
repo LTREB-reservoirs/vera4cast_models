@@ -108,7 +108,7 @@ silica <- read.csv("./model_code/inflow_tmwb/inputs/FCR2014_Chemistry.csv", head
 # and average CH4 - use average as CH4 input for the entier year
 ghg <- read.csv("./model_code/inflow_tmwb/inputs/BVR_GHG_Inflow_20200619.csv", header=T) |>
   dplyr::filter(Reservoir == "BVR") |>
-  dplyr::filter(Depth_m == 100|Depth_m == 200) |> #weir inflow
+  dplyr::filter(Depth_m == 100|Depth_m == 200) |> #weir inflow (depth col should be site)
   select(DateTime, ch4_umolL) |>
   mutate(DateTime = as.POSIXct(strptime(DateTime, "%d-%b-%y", tz="EST"))) |>
   rename(time = DateTime, CAR_ch4 = ch4_umolL)
@@ -126,7 +126,6 @@ pH <- read.csv(infile1) |>
   mutate(DateTime = as.POSIXct(strptime(DateTime, "%Y-%m-%d", tz="EST"))) |>
   rename(time = DateTime,
          CAR_pH = pH)
-
 
 # start loop
 inflow_build <- data.frame()

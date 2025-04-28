@@ -30,7 +30,7 @@ this_year <- data.frame(date = as.character(paste0(seq.Date(as_date('2024-04-26'
 
 # vera bucket
 s3 <- arrow::s3_bucket("bio230121-bucket01/vera4cast/inventory/catalog",
-                       endpoint_override = "renc.osn.xsede.org",
+                       endpoint_override = "amnh1.osn.mghpcc.org",
                        anonymous = TRUE)
 
 #submitted_forecasts_df <- arrow::open_dataset(s3) |> collect()

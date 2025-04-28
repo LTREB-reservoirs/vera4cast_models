@@ -24,7 +24,7 @@ data.format.functions <- list.files("./R/fable_NNETAR_focal")
 sapply(paste0("./R/fable_NNETAR_focal/", data.format.functions),source,.GlobalEnv)
 
 #Define targets filepath
-targets <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+targets <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
 
 #target_variable <- 'Chla_ugL_mean'
 #target_variable <- 'Temp_C_mean'

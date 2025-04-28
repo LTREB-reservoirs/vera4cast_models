@@ -82,13 +82,13 @@ myflowgage$area<- 2.27 #km
 myflowgage$declat<- 37.31321
 myflowgage$declon<- -79.81535
 
-# all_results <- arrow::open_dataset("s3://anonymous@bio230121-bucket01/flare/drivers/met/gefs-v12/stage2?endpoint_override=renc.osn.xsede.org")
+# all_results <- arrow::open_dataset("s3://anonymous@bio230121-bucket01/flare/drivers/met/gefs-v12/stage2?endpoint_override=amnh1.osn.mghpcc.org")
 # df <- all_results |> dplyr::collect()
 
 print('SETTING UP MET FILES...')
 ## historic met
 NLDAS <- arrow::open_dataset(arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage3/site_id=",flow_site),
-                                   endpoint_override = 'renc.osn.xsede.org',
+                                   endpoint_override = 'amnh1.osn.mghpcc.org',
                                    anonymous = TRUE)) |>
   filter(variable %in% c('precipitation_flux', "air_temperature")) |> 
   collect() |> 
@@ -113,7 +113,7 @@ NLDAS <- NLDAS|>
   dplyr::select(time, AirTemp, precip_mm)|>
   group_by(time) |>
   rename(mdate=time) |>
-  summarise(MaxTemp_C = max(AirTemp),
+  summarise(MaxTemp_C = max(AirTemp), ## AIRTEMP IS STILL IN KELVIN UNITS
             MinTemp_C = min(AirTemp),
             MeanTemp_C = mean(AirTemp),
             Precip_mmpd = sum(precip_mm)) 
@@ -328,8 +328,9 @@ source('./model_code/inflow_tmwb/inflow_prep.R')
 
 site = 'bvre'
 model_name = 'tmwb_inflow'
+forecast_date <- Sys.Date()
 
-for (i in seq.Date(as.Date('2025-02-01'), as.Date('2025-03-20'), by = 'days')){
+for (i in seq.Date(as.Date('2025-03-22'), as.Date('2025-03-24'), by = 'days')){
 forecast_date <- as.Date(i)
 print(forecast_date)
 

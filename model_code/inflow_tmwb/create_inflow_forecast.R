@@ -42,7 +42,7 @@ create_inflow_forecast <- function(inflow_obs, #observed inflow file (in this ca
   
   ## read in met data
   noaa_future_met <- arrow::open_dataset(arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2/reference_datetime=",noaa_date,"/site_id=",site_id),
-                                       endpoint_override = 'renc.osn.xsede.org',
+                                       endpoint_override = 'amnh1.osn.mghpcc.org',
                                        anonymous = TRUE)) |>
     filter(variable %in% c('precipitation_flux', "air_temperature")) |> 
     collect() |> 

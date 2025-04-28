@@ -20,7 +20,7 @@ this_year <- data.frame(date = as.Date(seq.Date(as_date('2025-01-01'), to = as_d
 
 # check inflow forecast dates
 s3 <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean/model_id=inflow_gefsClimAED"),
-                       endpoint_override = "https://renc.osn.xsede.org",
+                       endpoint_override = "https://amnh1.osn.mghpcc.org",
                        anonymous = TRUE)
 
 avail_dates <- gsub("reference_date=", "", s3$ls())
