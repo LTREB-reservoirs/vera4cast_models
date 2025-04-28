@@ -69,7 +69,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   print(paste0('NOAA data from: ',noaa_date))
   
   met_s3_future <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2",paste0("reference_datetime=",noaa_date),paste0("site_id=",site)),
-                                   endpoint_override = 'renc.osn.xsede.org',
+                                   endpoint_override = 'amnh1.osn.mghpcc.org',
                                    anonymous = TRUE)
   
   forecast_weather <- arrow::open_dataset(met_s3_future) |> 
@@ -86,7 +86,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   # split it into historic and future
   
   historic_noaa_s3 <- arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage3/site_id=",site),
-                                       endpoint_override = "renc.osn.xsede.org",
+                                       endpoint_override = "amnh1.osn.mghpcc.org",
                                        anonymous = TRUE)
   
   historic_weather <- arrow::open_dataset(historic_noaa_s3) |> 
@@ -123,7 +123,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
   
   ### old water temp 
   backup_forecasts <- arrow::s3_bucket(paste0(water_temp_4cast_old_url,'site_id=',site,'/model_id=test_runS3/'),
-                                       endpoint_override = 'renc.osn.xsede.org',
+                                       endpoint_override = 'amnh1.osn.mghpcc.org',
                                        anonymous = TRUE)
   
   df_flare_old <- arrow::open_dataset(backup_forecasts) |>
@@ -151,7 +151,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
     
     #water_temp_4cast_new_url <- "s3://anonymous@bio230121-bucket01/vera4cast/forecasts/parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean?endpoint_override=renc.osn.xsede.org"
     fcre_reforecast <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/forecasts/parquet/site_id=fcre/model_id=glm_aed_flare_v3/"),
-                                        endpoint_override = 'renc.osn.xsede.org',
+                                        endpoint_override = 'amnh1.osn.mghpcc.org',
                                         anonymous = TRUE)
     
     #new_flare_forecasts <- arrow::open_dataset(fcre_reforecast)
@@ -167,7 +167,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
     
   } else if (site == 'bvre') {
     bvre_reforecast <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/forecasts/parquet/site_id=bvre/model_id=glm_flare_v1/"),
-                                        endpoint_override = 'renc.osn.xsede.org',
+                                        endpoint_override = 'amnh1.osn.mghpcc.org',
                                         anonymous = TRUE)
     
     df_flare_new <- arrow::open_dataset(bvre_reforecast) |> 

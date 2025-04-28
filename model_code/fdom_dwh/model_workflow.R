@@ -35,7 +35,7 @@ forecast_horizon <- 34
 n_members <- 31
 calibration_start_date <- ymd("2022-11-11")
 model_id <- "fdom_AR_dwh"
-targets_url <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+targets_url <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
 
 water_temp_4cast_old_url <- "bio230121-bucket01/vt_backup/forecasts/parquet/"
 

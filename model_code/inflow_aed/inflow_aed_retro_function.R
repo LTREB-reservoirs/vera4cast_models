@@ -1,8 +1,8 @@
 inflow_aed_retro_function <- function(forecast_date){
   
-  inflow_targets_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"
+  inflow_targets_file <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"
   
-  met_target_file <- "https://renc.osn.xsede.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
+  met_target_file <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-met-targets.csv.gz"
   
   horizon <- 34
   #reference_datetime <- lubridate::as_date("2024-09-30") 
@@ -82,7 +82,7 @@ inflow_aed_retro_function <- function(forecast_date){
   
   
   met_s3_future <- arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage2/reference_datetime=",noaa_date,"/site_id=fcre"),
-                                    endpoint_override = "renc.osn.xsede.org",
+                                    endpoint_override = "amnh1.osn.mghpcc.org",
                                     anonymous = TRUE)
   
   df_future <- arrow::open_dataset(met_s3_future) |> 
@@ -97,7 +97,7 @@ inflow_aed_retro_function <- function(forecast_date){
   min_datetime <- min(df_future$datetime)
   
   met_s3_past <- arrow::s3_bucket(paste0("bio230121-bucket01/flare/drivers/met/gefs-v12/stage3/site_id=fcre"),
-                                  endpoint_override = "renc.osn.xsede.org",
+                                  endpoint_override = "amnh1.osn.mghpcc.org",
                                   anonymous = TRUE)
   
   past_date <- reference_datetime - lubridate::days(10)
