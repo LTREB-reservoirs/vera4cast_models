@@ -65,8 +65,9 @@
 #######################################################################
 
 #load packages
-pacman::p_load(dplyr,zoo,EcoHydRology,rMR,tidyverse,lubridate)
+pacman::p_load(dplyr,zoo,EcoHydRology,tidyverse,lubridate) #rMR
 
+source('./model_code/inflow_tmwb/Eq_ox_conc_function.R')
 
 inflow_prep <- function(inflow_df){
 
@@ -213,7 +214,7 @@ for (i in ensembles){
   #creating OXY_oxy column using RMR package, assuming that oxygen is at 100% saturation in this very well-mixed stream
   # Obtained elevation from BVR DEM at BVR 100 inflow to the reservoir
   for(i in 1:length(total_inflow$TEMP)){
-    total_inflow$OXY_oxy[i]<-(temp.C= rMR::Eq.Ox.conc(total_inflow$TEMP[i], elevation.m = 586,
+    total_inflow$OXY_oxy[i]<-(temp.C= Eq.Ox.conc(total_inflow$TEMP[i], elevation.m = 586,
                                                  bar.press = NULL, bar.units = NULL,
                                                  out.DO.meas = "mg/L",
                                                  salinity = 0, salinity.units = "pp.thou"))
