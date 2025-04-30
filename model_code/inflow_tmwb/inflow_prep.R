@@ -67,7 +67,7 @@
 #load packages
 pacman::p_load(dplyr,zoo,EcoHydRology,tidyverse,lubridate) #rMR
 
-source('./model_code/inflow_tmwb/rMr_functions.R')
+source('./model_code/inflow_tmwb/rMR_functions.R')
 
 inflow_prep <- function(inflow_df){
 
