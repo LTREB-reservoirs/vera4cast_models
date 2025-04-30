@@ -328,9 +328,16 @@ source('./model_code/inflow_tmwb/inflow_prep.R')
 
 site = 'bvre'
 model_name = 'tmwb_inflow'
-forecast_date <- Sys.Date()
+today_date <- Sys.Date()
 
-for (i in seq.Date(as.Date('2025-03-22'), as.Date('2025-03-24'), by = 'days')){
+s3_inflows <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean/model_id=tmwb_inflow"),
+                       endpoint_override = "https://amnh1.osn.mghpcc.org",
+                       anonymous = TRUE)
+avail_dates <- gsub("reference_date=", "", s3_inflows$ls())
+
+start_forecast_date <- as.Date(max(avail_dates)) + lubridate::days(1)
+
+for (i in seq.Date(start_forecast_date, today_date, by = 'days')){
 forecast_date <- as.Date(i)
 print(forecast_date)
 
