@@ -1,3 +1,19 @@
+Barom.Press <-
+  function(elevation.m, units = "atm"){
+    if(units == "atm") {fact <-1}
+    else if(units == "kpa") {
+      fact <- 101.325
+    }else if(units == "mmHg") {
+      fact <- 760
+    }else{
+      stop("invalid pressure units, must be
+                 'atm', 'kpa', or 'mmHg'")
+    }
+    P<-exp(-9.80665 * 0.0289644 * elevation.m / 
+             (8.31447 * 288.15))*fact
+    return(P)
+  }
+
 Eq.Ox.conc <- function(temp.C, elevation.m = NULL,
            bar.press = NULL, bar.units = "mmHg",
            out.DO.meas = "mg/L", salinity = 0,
@@ -14,7 +30,7 @@ Eq.Ox.conc <- function(temp.C, elevation.m = NULL,
         bar.press <- bar.press
       } else if(is.null(bar.press) == TRUE &&
                 is.null(elevation.m) == FALSE){
-        bar.press <- Barom.Press (elevation.m,
+        bar.press <- Barom.Press(elevation.m,
                                   units = bar.units)
       }else{
         stop("EITHER 'elevation.m' or 'bar.press' must be assigned
