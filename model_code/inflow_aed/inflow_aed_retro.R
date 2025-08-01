@@ -16,7 +16,7 @@ today <- paste(Sys.Date() - days(2), '00:00:00')
 # this_year <- data.frame(date = as.character(paste0(seq.Date(as_date('2025-01-01'), to = as_date(today), by = 'day'), ' 00:00:00')),
 #                         exists = NA)
 
-this_year <- data.frame(date = as.Date(seq.Date(as_date('2025-01-01'), to = as_date(today), by = 'day')))
+this_year <- data.frame(date = as.Date(seq.Date(as_date('2025-07-01'), to = as_date(today), by = 'day')))
 
 # check inflow forecast dates
 s3 <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean/model_id=inflow_gefsClimAED"),
