@@ -105,9 +105,9 @@ past_date <- reference_datetime - lubridate::days(10)
 df_past <- arrow::open_dataset(met_s3_past) |> 
   select(datetime, parameter, variable, prediction) |> 
   filter(variable %in% c("precipitation_flux","air_temperature"),
-         ((datetime <= min_datetime  & variable == "precipitation_flux") | 
-            datetime < min_datetime  & variable == "air_temperature"),
-         datetime > past_date) |> 
+         ((lubridate::as_datetime(datetime) <= lubridate::as_datetime(min_datetime)  & variable == "precipitation_flux") | 
+            lubridate::as_datetime(datetime) < lubridate::as_datetime(min_datetime)  & variable == "air_temperature"),
+         lubridate::as_datetime(datetime) > lubridate::as_datetime(past_date)) |> 
   collect() |> 
   rename(ensemble = parameter) |> 
   mutate(variable = ifelse(variable == "precipitation_flux", "precipitation", variable),
