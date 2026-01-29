@@ -45,21 +45,28 @@ flowgage_id = myflowgage_id
 begin_date = flow_start
 end_date = flow_end 
 
-url = paste("http://waterdata.usgs.gov/nwis/inventory?search_site_no=", flowgage_id, "&search_site_no_match_type=exact&sort_key=site_no&group_key=NONE&format=sitefile_output&sitefile_output_format=rdb&column_name=station_nm&column_name=site_tp_cd&column_name=dec_lat_va&column_name=dec_long_va&column_name=alt_va&column_name=drain_area_va&column_name=contrib_drain_area_va&column_name=rt_bol&list_of_search_criteria=search_site_no",sep="")
+# url = paste("http://waterdata.usgs.gov/nwis/inventory?search_site_no=", flowgage_id, "&search_site_no_match_type=exact&sort_key=site_no&group_key=NONE&format=sitefile_output&sitefile_output_format=rdb&column_name=station_nm&column_name=site_tp_cd&column_name=dec_lat_va&column_name=dec_long_va&column_name=alt_va&column_name=drain_area_va&column_name=contrib_drain_area_va&column_name=rt_bol&list_of_search_criteria=search_site_no",sep="")
+# 
+# gage_tsv=readLines(url)
+# gage_tsv=gage_tsv[grep("^#",gage_tsv,invert=T)][c(1,3)]
+# tempdf=read.delim(text=gage_tsv,sep="\t",header=T,colClasses = c("character", "character", "numeric", "numeric", "character", "character", "numeric", "numeric", "character", "numeric"))
+# area = tempdf$drain_area_va* 1.6^2
+# if(is.na(area)) {area=0;print("warning, no area associated with gage, setting to 0\n")}
+# declat = tempdf$dec_lat_va
+# declon = tempdf$dec_long_va
+# elev = tempdf$alt_va* 12/25.4
+# if(is.na(elev)) {elev=0;print("warning, no elevation associated with gage, setting to 0\n")}
 
-gage_tsv=readLines(url)
-gage_tsv=gage_tsv[grep("^#",gage_tsv,invert=T)][c(1,3)]
-tempdf=read.delim(text=gage_tsv,sep="\t",header=T,colClasses = c("character", "character", "numeric", "numeric", "character", "character", "numeric", "numeric", "character", "numeric"))
-area = tempdf$drain_area_va* 1.6^2
-if(is.na(area)) {area=0;print("warning, no area associated with gage, setting to 0\n")}
-declat = tempdf$dec_lat_va
-declon = tempdf$dec_long_va
-elev = tempdf$alt_va* 12/25.4
-if(is.na(elev)) {elev=0;print("warning, no elevation associated with gage, setting to 0\n")}
-
-gagename = tempdf$station_nm
+#gagename = tempdf$station_nm
+gagename = 'USGS-02056000'
 begin_date = as.character(begin_date)
 end_date = as.character(end_date)
+elev = 819.7
+
+#change coordinates and area for entire BVR watershed
+area<- 2.27 #km
+declat<- 37.31321
+declon<- -79.81535
 
 url = paste("http://nwis.waterdata.usgs.gov/nwis/dv?cb_00060=on&format=rdb&begin_date=",begin_date,"&end_date=",end_date,"&site_no=", flowgage_id, sep = "")
 flowdata_tsv=gage_tsv=readLines(url)
@@ -74,13 +81,6 @@ myflowgage = returnlist
 
 ### end function code ###
 
-
-
-
-#change coordinates and area for entire BVR watershed
-myflowgage$area<- 2.27 #km
-myflowgage$declat<- 37.31321
-myflowgage$declon<- -79.81535
 
 # all_results <- arrow::open_dataset("s3://anonymous@bio230121-bucket01/flare/drivers/met/gefs-v12/stage2?endpoint_override=amnh1.osn.mghpcc.org")
 # df <- all_results |> dplyr::collect()
@@ -337,7 +337,9 @@ avail_dates <- gsub("reference_date=", "", s3_inflows$ls())
 
 start_forecast_date <- as.Date(max(avail_dates)) + lubridate::days(1)
 
-for (i in seq.Date(start_forecast_date, today_date, by = 'days')){
+#for (i in seq.Date(today_date, start_forecast_date, by = 'day')){
+for (i in seq.Date(start_forecast_date, today_date, by = 'day')){
+  
 forecast_date <- as.Date(i)
 print(forecast_date)
 
