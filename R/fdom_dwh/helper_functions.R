@@ -166,7 +166,7 @@ generate_fDOM_forecast <- function(forecast_date, # a recommended argument so yo
       dplyr::collect()
     
   } else if (site == 'bvre') {
-    bvre_reforecast <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/forecasts/parquet/site_id=bvre/model_id=glm_flare_v1/"),
+    bvre_reforecast <- arrow::s3_bucket(file.path("bio230121-bucket01/flare/forecasts/parquet/site_id=bvre/model_id=glm_flare_v3/"),
                                         endpoint_override = 'amnh1.osn.mghpcc.org',
                                         anonymous = TRUE)
     
