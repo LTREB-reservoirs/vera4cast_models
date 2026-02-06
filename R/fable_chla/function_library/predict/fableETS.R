@@ -1,0 +1,69 @@
+#fableETS chl-a predictions for 30 days ahead
+#Author: Mary Lofton
+#Date: 26SEP23
+
+#Purpose: make predictions with ETS model
+
+library(fable)
+library(feasts)
+library(urca)
+
+#'Function to fit day of year model for chla
+#'@param data data frame with columns Date (yyyy-mm-dd) and
+#'median daily EXO_chla_ugL_1 with chl-a measurements in ug/L
+
+fableETS <- function(data, reference_datetime, forecast_horizon){
+  
+  #assign target and predictors
+  df <- data %>%
+    select(-depth_m, -variable) %>%
+    as_tsibble(key = site_id, index = datetime)
+  
+  #fit ARIMA from fable package
+  my.ets <- df %>%
+    model(ets = fable::ETS(log(observation + 0.001))) 
+  fitted_values <- fitted(my.ets)
+  
+  #build output df
+  df.out <- data.frame(site_id = df$site_id,
+                       model_id = "ETS",
+                       datetime = df$datetime,
+                       variable = "Chla_ugL_mean",
+                       depth_m = 1.6,
+                       observation = df$observation,
+                       prediction = fitted_values$.fitted)
+  
+  #get process error
+  sd_resid <- sd(df.out$prediction - df.out$observation)
+  
+  #create "new data" dataframe
+  fc_dates <- seq.Date(from = reference_datetime, to = reference_datetime + forecast_horizon, by = "day")
+  new_data <- tibble(datetime = rep(fc_dates,times = 2),
+                      site_id = rep(unique(df.out$site_id), each = length(fc_dates)),
+                      observation = NA) %>%
+    as_tsibble(key = site_id, index = datetime)
+  
+  #make forecast
+  fc <- forecast(my.ets, new_data = new_data, bootstrap = TRUE, times = 500)
+  
+  ensemble <- matrix(data = NA, nrow = length(fc$observation), ncol = 500)
+  for(i in 1:length(fc$observation)){
+    ensemble[i,] <- unlist(fc$observation[i])
+  }
+  
+  ensemble_df <- data.frame(ensemble) %>%
+    add_column(site_id = rep(unique(df.out$site_id), each = length(fc_dates)),
+               datetime = rep(fc_dates,times = 2),
+               reference_datetime = reference_datetime,
+               family = "ensemble",
+               variable = "Chla_ugL_mean",
+               model_id = "fableETS",
+               duration = "P1D",
+               project_id = "vera4cast",
+               depth_m = ifelse(site_id == "fcre",1.6,1.5)) %>%
+    pivot_longer(X1:X500, names_to = "parameter", values_to = "prediction") %>%
+    mutate(across(parameter, substr, 2, nchar(parameter))) 
+  
+  #return ensemble output in EFI format
+  return(ensemble_df)
+}
