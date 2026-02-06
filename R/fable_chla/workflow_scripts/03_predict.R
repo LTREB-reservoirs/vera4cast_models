@@ -11,8 +11,8 @@ library(lubridate)
 library(vera4castHelpers)
 
 #Load prediction functions
-data.format.functions <- list.files("./model_code/R/fable_chla/function_library/predict")
-sapply(paste0("./model_code/R/fable_chla/function_library/predict", data.format.functions),source,.GlobalEnv)
+data.format.functions <- list.files("./R/fable_chla/function_library/predict")
+sapply(paste0("./R/fable_chla/function_library/predict/", data.format.functions),source,.GlobalEnv)
 
 # predict.model.functions <- list.files("./code/function_library/predict")
 # sapply(paste0("./code/function_library/predict/",predict.model.functions),source,.GlobalEnv)
