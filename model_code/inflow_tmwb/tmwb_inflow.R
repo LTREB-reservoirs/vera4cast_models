@@ -333,7 +333,7 @@ today_date <- Sys.Date()
 # s3_inflows <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/archive-parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean/model_id=tmwb_inflow"),
 #                                endpoint_override = "https://amnh1.osn.mghpcc.org",
 #                                anonymous = TRUE)
-s3_inflows <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean/model_id=tmwb_inflow"),
+s3_inflows <- arrow::s3_bucket(bucket = glue::glue("bio230121-bucket01/vera4cast/forecasts/archive-parquet/project_id=vera4cast/duration=P1D/variable=Temp_C_mean/model_id=tmwb_inflow"),
                                endpoint_override = "https://amnh1.osn.mghpcc.org",
                                anonymous = TRUE)
 
