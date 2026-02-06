@@ -8,8 +8,8 @@ library(tidyverse)
 library(lubridate)
 
 #Load data formatting functions
-data.format.functions <- list.files("./model_code/R/fable_chla/function_library/format_data")
-sapply(paste0("./model_code/R/fable_chla/function_library/format_data", data.format.functions),source,.GlobalEnv)
+data.format.functions <- list.files("./R/fable_chla/function_library/format_data")
+sapply(paste0("./R/fable_chla/function_library/format_data/", data.format.functions),source,.GlobalEnv)
 
 #Define targets filepath
 targets <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
