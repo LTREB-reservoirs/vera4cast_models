@@ -341,8 +341,8 @@ avail_dates <- gsub("reference_date=", "", s3_inflows$ls())
 
 start_forecast_date <- as.Date(max(avail_dates)) + lubridate::days(1)
 
-for (i in seq.Date(today_date, start_forecast_date, by = 'day')){
-#for (i in seq.Date(start_forecast_date, today_date, by = 'day')){
+#for (i in seq.Date(today_date, start_forecast_date, by = 'day')){
+for (i in seq.Date(start_forecast_date, today_date, by = 'day')){
   
 forecast_date <- as.Date(i)
 print(forecast_date)
