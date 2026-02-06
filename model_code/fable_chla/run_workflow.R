@@ -17,7 +17,7 @@ remotes::install_github("LTREB-reservoirs/vera4castHelpers", force = TRUE)
 
 curr_reference_datetime <- Sys.Date()
 
-source("./model_code/R/fable_chla/workflow_scripts/01_format_data.R")
-source("./model_code/R/fable_chla/workflow_scripts/03_predict.R")
+source("./R/fable_chla/workflow_scripts/01_format_data.R")
+source("./R/fable_chla/workflow_scripts/03_predict.R")
 
 

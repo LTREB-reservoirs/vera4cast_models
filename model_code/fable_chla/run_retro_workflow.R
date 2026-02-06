@@ -78,11 +78,11 @@ if (length(missed_dates) != 0) {
     message(paste("creating forecasts for",print(curr_reference_datetime)))
     
     # download the noaa once then apply the forecasts
-    source("./model_code/R/fable_chla/workflow_scripts/01_format_data.R")
+    source("./R/fable_chla/workflow_scripts/01_format_data.R")
     message('data formatted!')
     
     # Script to run forecasts
-    source("./model_code/R/fable_chla/workflow_scripts/03_predict.R")
+    source("./R/fable_chla/workflow_scripts/03_predict.R")
     message('forecasts submitted!')
     
   }
