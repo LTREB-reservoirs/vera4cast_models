@@ -29,4 +29,4 @@ jobs:
       - name: Generate forecasts
         shell: Rscript {0}
         run: |
-          source("run_retro_workflow.R")
+          source("./model_code/fable_chla/run_retro_workflow.R")
