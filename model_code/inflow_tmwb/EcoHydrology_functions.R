@@ -180,14 +180,23 @@ get_usgs_gage <- function(flowgage_id,begin_date="1979-01-01",end_date="2013-01-
   begin_date = as.character(begin_date)
   end_date = as.character(end_date)
   
-  url = paste("http://nwis.waterdata.usgs.gov/nwis/dv?cb_00060=on&format=rdb&begin_date=",begin_date,"&end_date=",end_date,"&site_no=", flowgage_id, sep = "")
-  flowdata_tsv=gage_tsv=readLines(url)
-  flowdata_tsv=flowdata_tsv[grep("^#",flowdata_tsv,invert=T)][c(3:length(flowdata_tsv))]
-  flowdata = read.delim(text=flowdata_tsv,header=F,sep="\t",col.names = c("agency", "site_no", "date", "flow", "quality"), colClasses = c("character", "numeric", "character", "character", "character"), fill = T)
-  flowdata$mdate = as.Date(flowdata$date, format = "%Y-%m-%d")
-  flowdata$flow = as.numeric(as.character(flowdata$flow)) * 12^3 * 2.54^3/100^3 * 24 * 3600
-  flowdata = na.omit(flowdata)
+  # url = paste("http://nwis.waterdata.usgs.gov/nwis/dv?cb_00060=on&format=rdb&begin_date=",begin_date,"&end_date=",end_date,"&site_no=", flowgage_id, sep = "")
+  # flowdata_tsv=gage_tsv=readLines(url)
+  # flowdata_tsv=flowdata_tsv[grep("^#",flowdata_tsv,invert=T)][c(3:length(flowdata_tsv))]
+  # flowdata = read.delim(text=flowdata_tsv,header=F,sep="\t",col.names = c("agency", "site_no", "date", "flow", "quality"), colClasses = c("character", "numeric", "character", "character", "character"), fill = T)
+  # flowdata$mdate = as.Date(flowdata$date, format = "%Y-%m-%d")
+  # flowdata$flow = as.numeric(as.character(flowdata$flow)) * 12^3 * 2.54^3/100^3 * 24 * 3600
+  # flowdata = na.omit(flowdata)
+  flowdata <- dataRetrieval::read_waterdata_daily(monitoring_location_id = gagename,
+                                                  parameter_code = '00060',
+                                                  time = c(begin_date, end_date))
+  
+  flowdata$mdate = as.Date(flowdata$time, format = "%Y-%m-%d")
+  flowdata$date = as.Date(flowdata$time, format = "%Y-%m-%d")
+  flowdata$flow = as.numeric(as.character(flowdata$value)) * 12^3 * 2.54^3/100^3 * 24 * 3600
+  flowdata = flowdata |> drop_na(value)
   returnlist = list(declat = declat, declon = declon, flowdata = flowdata, area = area, elev = elev, gagename = gagename)
+  
   return(returnlist)
   
 }
