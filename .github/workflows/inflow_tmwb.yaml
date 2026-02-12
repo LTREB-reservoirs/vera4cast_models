@@ -22,7 +22,7 @@ jobs:
       - name: Install
         shell: Rscript {0}
         run: |
-          install.packages(c("GSODR","elevatr","sf","raster","soilDB","pacman","foreign","zoo","rMR"))
+          install.packages(c("GSODR","elevatr","sf","raster","soilDB","pacman","foreign","zoo","rMR","dataRetrieval"))
 
       - name: Generate forecasts
         shell: Rscript {0}
