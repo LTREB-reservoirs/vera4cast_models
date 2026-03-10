@@ -57,7 +57,7 @@ forecast <- forecast |>
   mutate(datetime = Sys.Date() + row_number() - 1)
 
 #format forecast for submission
-output_file_name <- paste0("inflow_gefsClimAED-",reference_datetime,".csv.gz")
+output_file_name <- paste0("llm.gemini2.5flash.ccc_",Sys.Date(),".csv.gz")
 
 forecast_formatted <- forecast |> 
   rowwise() %>%  
