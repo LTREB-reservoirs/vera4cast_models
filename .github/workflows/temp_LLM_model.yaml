@@ -24,7 +24,7 @@ jobs:
       - name: Install
         shell: Rscript {0}
         run: |
-          install.packages(c("ellmer", "glue"))
+          install.packages(c("ellmer", "glue",'pacman'))
 
       - name: Generate forecasts
         shell: Rscript {0}
