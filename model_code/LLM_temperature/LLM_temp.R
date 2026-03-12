@@ -87,4 +87,4 @@ forecast_formatted <- forecast |>
   readr::write_csv(output_file_name)
 
 vera4castHelpers::forecast_output_validator(output_file_name)
-vera4castHelpers::submit(output_file_name,first_submission = TRUE)
+vera4castHelpers::submit(output_file_name,first_submission = FALSE)
