@@ -57,7 +57,7 @@ forecast <- forecast |>
   mutate(datetime = Sys.Date() + row_number() - 1)
 
 #format forecast for submission
-output_file_name <- paste0("inflow_gefsClimAED-",reference_datetime,".csv.gz")
+output_file_name <- paste0("llm.gemini2.5flash.ccc_",Sys.Date(),".csv.gz")
 
 forecast_formatted <- forecast |> 
   rowwise() %>%  
@@ -87,4 +87,4 @@ forecast_formatted <- forecast |>
   readr::write_csv(output_file_name)
 
 vera4castHelpers::forecast_output_validator(output_file_name)
-vera4castHelpers::submit(file_name,first_submission = TRUE)
+vera4castHelpers::submit(output_file_name,first_submission = FALSE)
