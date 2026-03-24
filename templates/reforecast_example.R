@@ -24,7 +24,7 @@ targets_compare_df <- read_csv(targets_url) |>
   filter(variable == target_variable)
 
 
-reforecast_df <- generate_secchi_forecast(forecast_date, # a recommended argument so you can pass the date to the function
+reforecast_df <- example_secchi_model(forecast_date, # a recommended argument so you can pass the date to the function
                                           model_id,
                                           targets_url, # where are the targets you are forecasting?
                                           horizon = 30, #how many days into the future
