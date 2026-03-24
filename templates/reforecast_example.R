@@ -5,7 +5,7 @@ library(tidyverse)
 setwd(here::here())
 
 # load the forecast generation function (source any related funcitons/scripts you might need here)
-source('templates/example_model_code.R')
+source('templates/example_secchi_model.R')
 source('templates/get_weather.R') # wrapper around the RopenMeteo package to get weather covariates
 source('R/scoring/generate_forecast_score.R')
 
