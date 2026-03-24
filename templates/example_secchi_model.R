@@ -1,4 +1,4 @@
-generate_secchi_forecast <- function(forecast_date, # a recommended argument so you can pass the date to the function
+example_secchi_model <- function(forecast_date, # a recommended argument so you can pass the date to the function
                                      model_id,
                                      targets_url, # where are the targets you are forecasting?
                                      horizon = 30, #how many days into the future
