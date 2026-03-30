@@ -21,7 +21,7 @@ previous_obs <- targets |>
 
 my_prompt <- glue::glue("data with 35 rows and 2 columns, x and y. x should be water temperature for a lake in Vinton, Virginia this month and y should have standard deviation of the prediction. Each row is a sequential day of data. Use the air temperature forecast for Vinton in degrees Celsius to make the water temperature forecast in degrees Celsius. The water temperature today is {current_obs}. Yesterday's temperature is {yesterday_obs}. The day before's temperature is {previous_obs}.")
 
-ensemble<- 8 #testing the number of ensemble members
+ensemble<- 10 #testing the number of ensemble members
 forecast<-as.data.frame(matrix(data=NA,nrow=35,ncol=ensemble))
 #creating a dataframe to collect the forecasts
 
