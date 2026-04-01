@@ -10,7 +10,7 @@ generate_forecast_score <- function(targets_df,
   df <- forecast_df %>%
     #dplyr::filter(variable_type %in% variable_types) |>
     dplyr::mutate(family = as.character(family)) |>
-    score4cast::crps_logs_score(targets_df, extra_groups = c('depth')) |>
+    score4cast::crps_logs_score(targets_df, extra_groups = c('depth_m')) |>
     dplyr::mutate(horizon = datetime-lubridate::as_datetime(reference_datetime)) |>
     dplyr::mutate(horizon = as.numeric(lubridate::as.duration(horizon),
                                        units = "seconds"),
