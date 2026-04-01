@@ -1,4 +1,6 @@
 ## example model for secchi -- taken from Katie's model code ##
+library(devtools)
+devtools::install_github('eco4cast/score4cast')
 library(vera4castHelpers)
 library(tidyverse)
 
