@@ -106,9 +106,6 @@ generate_DCMdepth_forecast <- function(forecast_date,
   bathFCR <- bath|>
     filter(Reservoir == "FCR")
 
-  write.csv(bathFCR, "R/FDCMdepth_mp/bathFCR.csv", row.names = FALSE)
-  bathFCR <- read_csv("R/FDCMdepth_mp/bathFCR.csv")
-
   # interpolate bathymetry to 0.1m resolution
   bth_depths_interp <- seq(min(bathFCR$Depth_m), max(bathFCR$Depth_m), by = 0.1)
   bth_areas_interp  <- approx(x = bathFCR$Depth_m, y = bathFCR$SA_m2,
@@ -137,11 +134,17 @@ generate_DCMdepth_forecast <- function(forecast_date,
 
   # open the dataset once and reuse
   flare_ds <- arrow::open_dataset(fcre_reforecast)
-  tomorrow <- as.POSIXct(Sys.Date() + 1, tz = "UTC")
+
+  #pull FLARE forecast issued on/just before forecast_date so the future
+  #covariates actually align with the forecast horizon (was hardwired to "latest"
+  #+ Sys.Date() which broke any reforecast)
+  forecast_horizon_start <- as.POSIXct(forecast_date + 1, tz = "UTC")
+  forecast_ref_cutoff    <- as.POSIXct(forecast_date + 1, tz = "UTC")
 
   #future water temp####
-  latest_ref_temp <- flare_ds |>
-    filter(variable == "Temp_C_mean") |>
+  flare_ref_temp <- flare_ds |>
+    filter(variable == "Temp_C_mean",
+           reference_datetime <= forecast_ref_cutoff) |>
     summarise(max_ref = max(reference_datetime)) |>
     collect() |>
     pull(max_ref)
@@ -150,8 +153,8 @@ generate_DCMdepth_forecast <- function(forecast_date,
     filter(
       variable == "Temp_C_mean",
       parameter <= 31,
-      reference_datetime == latest_ref_temp,
-      datetime >= tomorrow
+      reference_datetime == flare_ref_temp,
+      datetime >= forecast_horizon_start
     ) |>
     collect()
 
@@ -168,9 +171,9 @@ generate_DCMdepth_forecast <- function(forecast_date,
     select(reference_datetime, datetime_date, site_id, depth, family, parameter, variable, prediction, model_id)
 
   ####future secchi####
-  #extc instead
-  latest_ref_secchi <- flare_ds |>
-    filter(variable == "secchi") |>
+  flare_ref_secchi <- flare_ds |>
+    filter(variable == "secchi",
+           reference_datetime <= forecast_ref_cutoff) |>
     summarise(max_ref = max(reference_datetime)) |>
     collect() |>
     pull(max_ref)
@@ -180,8 +183,8 @@ generate_DCMdepth_forecast <- function(forecast_date,
     filter(
       variable == "secchi",
       parameter <= 31,
-      reference_datetime == latest_ref_secchi,
-      datetime >= tomorrow
+      reference_datetime == flare_ref_secchi,
+      datetime >= forecast_horizon_start
     ) |>
     collect()
 
@@ -325,7 +328,7 @@ generate_DCMdepth_forecast <- function(forecast_date,
   #drag the entire stage3 archive across the network
   historic_weather_raw <- arrow::open_dataset(historic_noaa_s3) |>
     filter(datetime < forecast_date,
-           datetime >= as.POSIXct(calibration_start_date, tz = "UTC"),
+           datetime >= as.Date(calibration_start_date),
            variable %in% met_vars) |>
     group_by(datetime, variable) |>
     summarise(prediction = mean(prediction, na.rm = T), .groups = "drop") |>
@@ -349,7 +352,7 @@ generate_DCMdepth_forecast <- function(forecast_date,
   #### Fit random forest model for DCM depth ####
   message('Preparing training data')
 
-  # define all possible predictors
+  # predictors
   all_predictor_vars <- c("SchmidtStability_Jm2_mean", "Secchi_m_sample",
                           "air_temperature", "wind_speed",
                           "doy_sin", "doy_cos")
@@ -447,6 +450,13 @@ generate_DCMdepth_forecast <- function(forecast_date,
              doy_cos = cos(2 * pi * lubridate::yday(forecasted_dates[i]) / 365)) |>
       select(-parameter)
 
+    #ranger errors on NA inputs - skip days where any predictor is missing
+    #(this can happen if FLARE doesn't extend that far into the horizon)
+    if(any(is.na(new_data[, predictor_vars]))){
+      message(paste0('Skipping ', forecasted_dates[i], ' - missing predictor values'))
+      next
+    }
+
     # predict using quantile regression forest
     # each ensemble member gets a different quantile of the conditional distribution
     rf_pred <- predict(dcm_model,
@@ -455,8 +465,9 @@ generate_DCMdepth_forecast <- function(forecast_date,
                        quantiles = quantile_levels)
 
     # extract the diagonal: member j gets quantile j from its own input row
-    dcm_pred$value <- sapply(1:n_members, function(j) rf_pred$predictions[j, j]) +
-      rnorm(n = n_members, mean = 0, sd = sigma) # add process uncertainty
+    #quantile RF already gives the conditional spread across members so we don't
+    #also add rnorm(sigma) - was double-counting process + structural uncertainty
+    dcm_pred$value <- sapply(1:n_members, function(j) rf_pred$predictions[j, j])
 
     # insert values back into the forecast dataframe
     forecast_full_unc <- forecast_full_unc |>

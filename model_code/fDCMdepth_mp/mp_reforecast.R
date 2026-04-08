@@ -12,10 +12,11 @@ source('R/fDCMdepth_mp/data_availability_function.R')
 source('R/scoring/generate_forecast_score.R')
 source('templates/plot_function.R')
 
-#lowest observation is 2018-10-22 
+#2024-09-25 is the latest date for FLARE output
+#deepest observation since then is 2025-02-10 at 6.25 so I want to test 5 days prior
 
 # ---- Generate the forecasts -----
-forecast_date <- as.Date('2018-10-20') ## could call Sys.Date() here to run true forecast
+forecast_date <- as.Date('2026-03-02') ## could call Sys.Date() here to run true forecast
 model_id <- 'fDCMdepth_mp' # your unique model name
 forecast_horizon <- 34 # how long should the forecast be?
 n_members <- 31
@@ -41,7 +42,9 @@ reforecast_df <- generate_DCMdepth_forecast(forecast_date = forecast_date,
                                             project_id = 'vera4cast')
 
 targets_compare_df <- read_csv(targets_url) |>
-  filter(variable == target_variable, site_id %in% c("fcre"))
+  filter(variable == target_variable, site_id %in% c("fcre"))|>
+  filter(datetime >= date('2024-09-25')) #this is the earliest date for flare availability
+
 
 #depth_m is NA in both targets and forecast for this variable, but joins don't
 #match on NA - assign a placeholder so the score join actually attaches obs
@@ -52,22 +55,23 @@ reforecast_score_df <- generate_forecast_score(targets_df = targets_compare_df,
                                                forecast_df = reforecast_df)
 
 
-#join observations onto the score df directly so they actually show on the plot
-#(the score4cast join sometimes drops obs for this variable)
+#plot the score df for ribbon/mean, but pull obs straight from targets so they
+#are not dependent on the score4cast join lining up
+plot_df <- reforecast_score_df |>
+  mutate(datetime = as.Date(datetime))
+
 obs_df <- targets_compare_df |>
   mutate(datetime = as.Date(datetime)) |>
+  filter(datetime >= min(plot_df$datetime),
+         datetime <= max(plot_df$datetime)) |>
   select(datetime, observation)
-
-plot_df <- reforecast_score_df |>
-  mutate(datetime = as.Date(datetime)) |>
-  select(-any_of("observation")) |>
-  left_join(obs_df, by = "datetime")
 
 ggplot(plot_df, aes(x = datetime)) +
   geom_ribbon(aes(ymin = quantile10, ymax = quantile90),
               colour = 'lightblue', fill = 'lightblue') +
   geom_line(aes(y = mean)) +
-  geom_point(aes(y = observation), color = 'black') +
+  geom_point(data = obs_df, aes(x = datetime, y = observation),
+             color = 'black', size = 2) +
   scale_y_reverse(limits = c(10, 0)) +
   labs(y = 'DCM Depth (m)') +
   theme_bw() +
