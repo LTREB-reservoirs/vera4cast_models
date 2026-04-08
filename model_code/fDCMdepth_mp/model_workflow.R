@@ -102,6 +102,7 @@ p1 <- forecast_output |>
     x        = NULL,
     y        = "DCM Depth (m)"
   ) +
+  scale_y_reverse() +
   theme_minimal(base_size = 12) +
   theme(panel.grid.minor = element_blank())
 
@@ -116,6 +117,7 @@ p2 <- summary_df |>
     x        = "Date",
     y        = "DCM Depth (m)"
   ) +
+  scale_y_reverse() +
   theme_minimal(base_size = 12) +
   theme(panel.grid.minor = element_blank())
 
