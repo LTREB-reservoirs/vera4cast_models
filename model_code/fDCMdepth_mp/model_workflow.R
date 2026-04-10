@@ -77,6 +77,12 @@ for (i in sites){
 
 } # end loop
 
+#forecast_output_validator()
+#submit()
+#Vera4castHelpers functions
+#need to register model
+
+
 library(ggplot2)
 library(dplyr)
 library(patchwork)
