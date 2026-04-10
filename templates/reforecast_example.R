@@ -1,0 +1,46 @@
+## example model for secchi -- taken from Katie's model code ##
+library(devtools)
+devtools::install_github('eco4cast/score4cast')
+library(vera4castHelpers)
+library(tidyverse)
+
+setwd(here::here())
+
+# load the forecast generation function (source any related funcitons/scripts you might need here)
+source('templates/example_secchi_model.R')
+source('templates/get_weather.R') # wrapper around the RopenMeteo package to get weather covariates
+source('R/scoring/generate_forecast_score.R')
+source('templates/plot_function.R')
+
+
+# ---- Generate the forecasts -----
+# default is to run a real-time forecast for today
+forecast_date <- as.Date('2025-08-01') ## could call Sys.Date() here to run true forecast
+model_id <- 'secchi_mean' # your unique model name
+forecast_horizon <- 30 # how long should the forecast be?
+target_variable <- 'Secchi_m_sample' # variable you want to forecast
+forecast_site <- 'fcre'
+
+
+targets_url = "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+targets_compare_df <- read_csv(targets_url) |> 
+  filter(variable == target_variable)
+
+
+reforecast_df <- example_secchi_model(forecast_date, # a recommended argument so you can pass the date to the function
+                                          model_id,
+                                          targets_url, # where are the targets you are forecasting?
+                                          horizon = 30, #how many days into the future
+                                          forecast_variable = target_variable,
+                                          site = forecast_site, # what site
+                                          project_id = 'vera4cast') 
+
+targets_compare_df <- read_csv(targets_url) |> 
+  filter(variable == target_variable)
+
+reforecast_score_df <- generate_forecast_score(targets_df = targets_compare_df,
+                                                forecast_df = reforecast_df)
+
+
+generate_forecast_plot(score_df = reforecast_score_df, 
+                       y_limits = c(0,5))
