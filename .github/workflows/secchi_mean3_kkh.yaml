@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
 
 
-name: YOUR_EXAMPLE_WORKFLOW ## POPULATE THIS WITH YOUR MODEL ID
-
+name: secchi_mean3_kkh
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -25,4 +24,4 @@ jobs:
       - name: Generate forecasts
         shell: Rscript {0}
         run: |
-          source("model_code/YOUR_MODEL_ID/YOUR_MODEL_SCRIPT.R") ## POPULATE THIS WITH THE PATH TO YOUR CODE
+          source("model_code/secchi_mean3_kkh/secchi_mean3_kkh.R") ## POPULATE THIS WITH THE PATH TO YOUR CODE
