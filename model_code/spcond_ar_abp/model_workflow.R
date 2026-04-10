@@ -1,4 +1,4 @@
-# Run fdom model and submit to VERA forecasting challenge
+# Run ARIMA model for specific conductance and submit to VERA forecasting challenge
 #Author: DWH (organized be ADD)
 #Date: 29July2024
 
@@ -41,13 +41,12 @@ inflow_4cast_url <- 'bio230121-bucket01/vera4cast/forecasts/archive-parquet/proj
 var <- "SpCond_uScm_mean"
 project_id <- "vera4cast"
   
-  output_folder <- paste0("./model_output/spcond_ar_abp/", model_id, "_", site, "_", forecast_date, ".csv")
+  #output_folder <- paste0("./model_output/spcond_ar_abp/", model_id, "_", site, "_", forecast_date, ".csv")
   
   ##run function
   forecast_output <- generate_spcond_forecast(forecast_date = forecast_date, 
                                             forecast_horizon = forecast_horizon, 
                                             n_members = n_members,
-                                            output_folder = output_folder, 
                                             model_id = model_id, 
                                             targets_url = targets_url,
                                             inflow_4cast_url = inflow_4cast_url,
@@ -66,7 +65,7 @@ project_id <- "vera4cast"
   
   if (!file.exists("./model_output/spcond_ar_abp/")){
     dir.create("./model_output/spcond_ar_abp/")
-  
+  }
   
   write.csv(forecast_output, forecast_file_abs_path, row.names = FALSE)
   
@@ -85,4 +84,4 @@ project_id <- "vera4cast"
   #   ggplot(aes(x = date, y = prediction, color = as.character(parameter)))+
   #   geom_line()
   
-} # end loop
+#} # end loop
