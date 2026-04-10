@@ -9,10 +9,10 @@ my_forecast_date <- Sys.Date()
 my_model_id <- 'Dom_CO2_Model'
 
 # 3. Source the math function from your R folder
-source('/vera4cast_models/R/Dom_CO2/Dom_CO2_model.R')
+source('/vera4cast_models/R/co2_insitu_lm_Dom/CO2_model_function.R')
 
 # 4. Run the function!
-final_forecast <- Dom_CO2model_function(forecast_date = my_forecast_date, model_id = my_model_id)
+final_forecast <- CO2_model_function(forecast_date = my_forecast_date, model_id = my_model_id)
 
 # View the results
 print(head(final_forecast))
