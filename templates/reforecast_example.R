@@ -1,4 +1,6 @@
 ## example model for secchi -- taken from Katie's model code ##
+library(devtools)
+devtools::install_github('eco4cast/score4cast')
 library(vera4castHelpers)
 library(tidyverse)
 
@@ -8,6 +10,7 @@ setwd(here::here())
 source('templates/example_secchi_model.R')
 source('templates/get_weather.R') # wrapper around the RopenMeteo package to get weather covariates
 source('R/scoring/generate_forecast_score.R')
+source('templates/plot_function.R')
 
 
 # ---- Generate the forecasts -----
