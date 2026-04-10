@@ -39,13 +39,12 @@ forecast_date = Sys.Date() - lubridate::days(1)     # Date object: the reference
   site = "tubr" 
 
  
-  output_folder <- paste0("./model_output/inflow_ar_abp/", model_id, "_", site, "_", forecast_date, ".csv")
+  #output_folder <- paste0("./model_output/inflow_ar_abp/", model_id, "_", site, "_", forecast_date, ".csv")
   
   ##run function
   forecast_output <- generate_inflow_forecast(forecast_date = forecast_date, 
                                             forecast_horizon = forecast_horizon, 
                                             n_members = n_members,
-                                            output_folder = output_folder, 
                                             model_id = model_id, 
                                             inflow_targets_url = inflow_targets_url,   # vera4cast daily-inflow-targets.csv.gz URL
                                             met_targets_url = met_targets_url,      # vera4cast daily-met-targets.csv.gz URL
@@ -64,7 +63,7 @@ forecast_date = Sys.Date() - lubridate::days(1)     # Date object: the reference
   
   if (!file.exists("./model_output/inflow_ar_abp/")){
     dir.create("./model_output/inflow_ar_abp/")
-  
+  }
   
   write.csv(forecast_output, forecast_file_abs_path, row.names = FALSE)
   
@@ -83,4 +82,4 @@ forecast_date = Sys.Date() - lubridate::days(1)     # Date object: the reference
   #   ggplot(aes(x = date, y = prediction, color = as.character(parameter)))+
   #   geom_line()
   
-} # end loop
+ # end loop
