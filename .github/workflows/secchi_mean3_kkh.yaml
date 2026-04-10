@@ -19,7 +19,7 @@ jobs:
       - name: Install
         shell: Rscript {0}
         run: |
-          install.packages(c("YOUR NEEDED PACKAGES")) ## POPULATE THIS WITH ANY SPECIFIC PACKAGES YOU NEED
+          install.packages(c("dplyr", "lubridate", "readr", "tidyr")) ## POPULATE THIS WITH ANY SPECIFIC PACKAGES YOU NEED
 
       - name: Generate forecasts
         shell: Rscript {0}
