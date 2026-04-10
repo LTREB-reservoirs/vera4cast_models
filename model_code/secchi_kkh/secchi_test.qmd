@@ -1,0 +1,382 @@
+---
+title: "secchi_test"
+format: html
+---
+
+```{r libraries}
+library(lubridate)
+library(tidyverse)
+library(dplyr)
+
+
+```
+
+
+```{r current secchi model}
+
+# site_id <- 'fcre'
+# site <- 'fcre'
+# targets_url <- "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+# 
+# targets <- read_csv('https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz') |> filter(variable == 'Secchi_m_sample')
+# 
+# example_secchi_model <- function(forecast_date, # a recommended argument so you can pass the date to the function
+#                                      model_id,
+#                                      targets_url, # where are the targets you are forecasting?
+#                                      horizon = 30, #how many days into the future
+#                                      forecast_variable = c("Secchi_m_sample"),
+#                                      site, # what site(s)
+#                                      project_id = 'vera4cast') {
+#   
+#   horizon_dates <- data.frame(datetime = seq.Date(from = forecast_date + days(1), by = "day", length.out = horizon)) #if this becomes a date time we may
+# 
+#   #-------------------------------------
+#   
+#   # Get targets
+#   message('Getting targets')
+#   targets <- readr::read_csv(targets_url, show_col_types = F) |>
+#     filter(variable == forecast_variable,
+#            site_id == site,
+#            datetime < forecast_date)
+#   #-------------------------------------
+# 
+#   
+#   
+#   #make model
+#   forecast_last_n <- targets %>%
+#     select(observation) %>%
+#     na.omit() %>%
+#     slice_tail(n= mean_obs)
+#     
+#   forecasted_secchi_rolling_avg <-  forecast_last_n |> 
+#     summarise(mu = mean(observation), sigma = sd(observation)) %>%
+#     slice(rep(1:n(), each = 30)) %>%
+#     cbind(horizon_dates) %>%     #add values to dates
+#     pivot_longer(names_to = "parameter", values_to = "prediction", cols = c(mu, sigma))
+#   
+#   forecast_secchi_one_week <- targets %>%
+#     select(observation) %>%
+#     na.omit() %>%
+#     slice_tail(n= mean_obs) %>%
+#     summarise(observation = mean(observation))
+#   
+#   week2 <- bind_rows(forecast_last_n, forecast_secchi_one_week)
+#   
+#     forecast_last_n <- week2 %>%
+#     select(observation) %>%
+#     na.omit() %>%
+#     slice_tail(n= mean_obs)
+#   
+#     forecasted_secchi_rolling_avg <-  forecast_last_n |> 
+#     summarise(mu = mean(observation), sigma = sd(observation)) %>%
+#     slice(rep(1:n(), each = 30)) %>%
+#     cbind(horizon_dates) %>%     #add values to dates
+#     pivot_longer(names_to = "parameter", values_to = "prediction", cols = c(mu, sigma))
+#   
+#     forecast_secchi_one_week <- week2 %>%
+#     select(observation) %>%
+#     na.omit() %>%
+#     slice_tail(n= mean_obs) %>%
+#     summarise(observation = mean(observation))
+#     
+#     week3 <- bind_rows(forecast_last_n, forecast_secchi_one_week)
+#     
+#     
+#   # Generate forecasts
+#   message('Generated forecast')
+# 
+#   forecast_df <- data.frame(datetime = horizon_dates,
+#                             reference_datetime = forecast_date,
+#                             model_id = model_id,
+#                             site_id = site,
+#                             family = 'normal',
+#                             variable = forecast_variable,
+#                             depth_m = NA,
+#                             duration = targets$duration[1],
+#                             project_id = project_id)
+#   
+#   forecast_df <- forecast_df |>
+#     right_join(forecasted_secchi_rolling_avg, by = c('datetime')) |>
+#     select(reference_datetime, datetime, site_id, model_id, variable, family, parameter, prediction, depth_m, project_id, duration)
+#   
+#   
+#   return(forecast_df)
+# 
+# }
+```
+
+
+```{r secchi original}
+# site = 'fcre'
+# 
+# generate_secchi_forecast <- function(forecast_date, # a recommended argument so you can pass the date to the function
+#                                       model_id,
+#                                       targets_url, # where are the targets you are forecasting?
+#                                       horizon = 30, #how many days into the future
+#                                       variable_collect = c("Secchi_m_sample"),
+#                                       variable = c("Secchi_m_sample"),
+#                                      mean_obs = 3,
+#                                       site, # what site(s)
+#                                       project_id = 'vera4cast') {
+# 
+#   horizon_dates <- data.frame(datetime = seq.Date(from = forecast_date + days(1), by = "day", length.out = horizon)) #if this becomes a date time we may
+#   #have a problem, days(1) should fix it
+# 
+#   # Put your forecast generating code in here, and add/remove arguments as needed.
+#   # Forecast date should not be hard coded
+#   # This is an example function that also grabs weather forecast information to be used as co-variates
+#   #-------------------------------------
+# 
+#   # Get targets
+#   message('Getting targets')
+#   targets <- readr::read_csv(targets_url, show_col_types = F) |>
+#     filter(variable %in% variable_collect,
+#            site_id %in% site,
+#            datetime < forecast_date)
+# 
+#   #make model
+#  forecasted_secchi_rolling_avg <-  targets %>%
+#     select(observation) %>%
+#     na.omit() %>%
+#     slice_tail(n=mean_obs) %>%
+#     summarise(mu = mean(observation), sigma = sd(observation)) %>%
+#     slice(rep(1:n(), each = 30)) %>%
+#     cbind(horizon_dates) %>%     #add values to dates
+#     pivot_longer(names_to = "parameter", values_to = "prediction", cols = c(mu, sigma))
+# 
+#   # forecasted_secchi_2 <- targets %>%
+#   #   select(observation) %>%
+#   #   na.omit() #%>%
+# 
+#   #add values to dates
+# 
+# 
+#   # Generate forecasts
+#   message('Generated forecast')
+#   # forecast <- (forecast_weather$air_temperature * model_fit$coefficients[2]) + model_fit$coefficients[1]
+#   #
+#   forecast_df <- data.frame(datetime = horizon_dates,
+#                             reference_datetime = forecast_date,
+#                             model_id = model_id,
+#                             site_id = site,
+#                             parameter = forecasted_secchi_rolling_avg$parameter,
+#                             family = 'normal', #what is the distribution of your uncertainty?
+#                             prediction = forecasted_secchi_rolling_avg$prediction,
+#                             variable = variable,
+#                             depth_m = NA,
+#                             duration = targets$duration[1],
+#                             project_id = project_id)
+#   forecasted_secchi <- data.frame(forecasted_secchi_rolling_avg)
+#   #-------------------------------------
+# 
+#   return(forecast_df)
+#   return(forecasted_secchi)
+# 
+# }
+```
+
+
+Now, going to take the secchi model and make a forecast and append it to the file, and apply the new forecast every week. 
+
+
+```{r}
+secchi_forecast <- function(forecast_start,
+                           se_period,
+                           se_start_date = forecast_start - se_period,
+                           weeks = 4,
+                           mean_obs = 3,
+                           site = "fcre",
+                           forecast_variable = "Secchi_m_sample",
+                           targets_url = "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz") {
+  
+  library(dplyr)
+  library(readr)
+  library(lubridate)
+  library(tidyr)
+  
+  #-----------------------------
+  # LOAD DATA
+  #-----------------------------
+  targets <- read_csv(targets_url, show_col_types = FALSE) %>%
+    filter(variable == forecast_variable,
+           site_id == site) %>%
+    arrange(datetime) %>%
+    select(datetime, observation)
+  
+  #-----------------------------
+  # STEP 1: COMPUTE SE (HISTORICAL)
+  #-----------------------------
+  results_list <- vector("list", se_period)
+  
+  for (day in seq_len(se_period)) {
+    
+    forecast_date <- se_start_date + days(day)
+    
+    idx <- which(targets$datetime < forecast_date)
+    if (length(idx) < mean_obs) next
+    
+    current_obs <- targets$observation[idx]
+    buffer <- tail(na.omit(current_obs), mean_obs)
+    
+    day_results <- vector("list", weeks)
+    
+    for (week in seq_len(weeks)) {
+      
+      mu <- mean(buffer)
+      
+      horizon_dates <- seq(
+        from = forecast_date + (week - 1) * 7,
+        by = "day",
+        length.out = 7
+      )
+      
+      df <- data.frame(
+        date = horizon_dates,
+        prediction = rep(mu, 7),
+        week = week,
+        forecast_date = forecast_date
+      )
+      
+      day_results[[week]] <- df
+      
+      # recursive update
+      buffer <- c(tail(buffer, mean_obs - 1), mu)
+    }
+    
+    results_list[[day]] <- bind_rows(day_results)
+  }
+  
+  reforecast <- bind_rows(results_list)
+  
+  combined <- reforecast %>%
+    left_join(targets, by = c("date" = "datetime")) %>%
+    drop_na(observation)
+  
+  # residual-based SE by week
+  se_combined <- combined %>%
+    group_by(week) %>%
+    summarise(
+      se = sd(prediction - observation),
+      .groups = "drop"
+    )
+  
+  #-----------------------------
+  # STEP 2: FINAL FORECAST AT forecast_start
+  #-----------------------------
+  
+  idx <- which(targets$datetime < forecast_start)
+  current_obs <- targets$observation[idx]
+  buffer <- tail(na.omit(current_obs), mean_obs)
+  
+  final_results <- vector("list", weeks)
+  
+  for (week in seq_len(weeks)) {
+    
+    mu1 <- mean(buffer)
+    mu <- pmax(mu1, 0)
+
+    
+    sigma <- se_combined$se[se_combined$week == week]
+     
+     if ((mu - sigma) < 0) {
+    sigma <- mu
+     }
+    
+    horizon_dates <- seq(
+      from = forecast_start + (week - 1) * 7,
+      by = "day",
+      length.out = 7
+    )
+    
+    df <- data.frame(
+      date = rep(horizon_dates, 2),
+      parameter = rep(c("mu", "sigma"), each = 7),
+      prediction = c(rep(mu, 7), rep(sigma, 7)),
+      week = week,
+      forecast_date = forecast_start
+    )
+    
+    final_results[[week]] <- df
+    
+    # recursive update
+    buffer <- c(tail(buffer, mean_obs - 1), mu)
+  }
+  
+  forecast_output <- bind_rows(final_results)
+  
+forecast_output <- bind_rows(final_results) %>%
+  mutate(
+    reference_datetime = forecast_date,
+    datetime = date,
+    site_id = site,
+    model_id = "secchi_last3obs_mean",   # you can change this
+    variable = forecast_variable,
+    family = "normal",             # since you're using mu/sigma
+    depth_m = NA_real_,
+    project_id = "vera4cast",
+    duration = "P1D"
+  ) %>%
+  select(reference_datetime,
+         datetime,
+         site_id,
+         model_id,
+         variable,
+         family,
+         parameter,
+         prediction,
+         depth_m,
+         project_id,
+         duration)
+
+return(forecast_output)
+}
+
+forecast_output <- secchi_forecast(forecast_start = Sys.Date(),
+                se_period = 720,
+                weeks = 4, 
+                mean_obs = 3,
+                site = 'fcre')
+
+forecast_wide <- forecast_output %>%
+  pivot_wider(names_from = parameter, values_from = prediction)
+
+# Plot mean + shaded sigma
+ggplot(forecast_wide, aes(x = datetime)) +
+  geom_ribbon(aes(ymin = mu - sigma, ymax = mu + sigma),
+              fill = "blue", alpha = 0.2) +
+  geom_line(aes(y = mu), color = "blue", size = 1) +
+  labs(
+    x = "Date",
+    y = "Secchi Depth (m)",
+    title = "Secchi Forecast with ±1 Sigma",
+    caption = paste("Forecast reference date:", unique(forecast_wide$reference_datetime))
+  ) +
+  theme_minimal()
+
+
+forecast_output <- secchi_forecast(forecast_start = Sys.Date(),
+                se_period = 720,
+                weeks = 4, 
+                mean_obs = 3,
+                site = 'bvre')
+
+# Pivot wider so we have mu and sigma in separate columns
+forecast_wide <- forecast_output %>%
+  pivot_wider(names_from = parameter, values_from = prediction)
+
+# Plot mean + shaded sigma
+ggplot(forecast_wide, aes(x = datetime)) +
+  geom_ribbon(aes(ymin = mu - sigma, ymax = mu + sigma),
+              fill = "blue", alpha = 0.2) +
+  geom_line(aes(y = mu), color = "blue", size = 1) +
+  labs(
+    x = "Date",
+    y = "Secchi Depth (m)",
+    title = "Secchi Forecast with ±1 Sigma",
+    caption = paste("Forecast reference date:", unique(forecast_wide$reference_datetime))
+  ) +
+  theme_minimal()
+
+
+```
+
