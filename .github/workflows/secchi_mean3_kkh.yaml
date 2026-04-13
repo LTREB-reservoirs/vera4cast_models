@@ -24,4 +24,4 @@ jobs:
       - name: Generate forecasts
         shell: Rscript {0}
         run: |
-          source("model_code/secchi_mean3_kkh/secchi_mean3_kkh.R") ## POPULATE THIS WITH THE PATH TO YOUR CODE
+          source("model_code/secchi_kkh/secchi_mean3_kkh.R") ## POPULATE THIS WITH THE PATH TO YOUR CODE
