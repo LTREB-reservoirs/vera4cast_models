@@ -13,4 +13,4 @@ write.csv(forecast_output, './model_output/secchi_kkh/secchi_kkh.csv')
 
 vera4castHelpers::forecast_output_validator('./model_output/secchi_kkh/secchi_kkh.csv')
 
-vera4castHelpers::submit(forecast_output, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
+vera4castHelpers::submit('./model_output/secchi_kkh/secchi_kkh.csv', s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
