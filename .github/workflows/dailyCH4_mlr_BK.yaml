@@ -17,9 +17,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Install
+      - name: install packages
         shell: Rscript {0}
         run: |
+          install.packages(c('pacman'))
 
       - name: Generate forecasts
         shell: Rscript {0}
