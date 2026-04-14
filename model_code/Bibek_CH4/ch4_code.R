@@ -48,12 +48,16 @@ weather_dat <- vera4castHelpers::noaa_stage3() |>
          site_id == 'fcre') |> 
   collect() |> 
   mutate(reference_datetime = forecast_date) |> 
-  filter(variable == c("air_temperature",
+  filter(variable %in% c("air_temperature",
                        "eastward_wind",
                        "northward_wind")) |>
-  mutate(windspeed = sqrt(eastward_wind^2 + northward_wind^2))
+  pivot_wider(names_from = variable, values_from = prediction) |> 
+  mutate(windspeed = sqrt(eastward_wind^2 + northward_wind^2)) |> 
+  select(-eastward_wind, -northward_wind) |> 
+  pivot_longer(-c(parameter,datetime, family, reference_datetime, site_id), names_to = 'variable', values_to = 'prediction') |> 
+  mutate(model_id = 'gfs_seamless')
 
-# weather_dat <- ropenmeteo::get_ensemble_forecast(
+# weather_dat_ropenmeteo <- ropenmeteo::get_ensemble_forecast(
 #   latitude = lat,
 #   longitude = long,
 #   forecast_days = 30, # days into the future
@@ -61,7 +65,7 @@ weather_dat <- vera4castHelpers::noaa_stage3() |>
 #   model = "gfs_seamless", # this is the NOAA gefs ensemble model
 #   variables = c("temperature_2m",
 #                 "wind_speed_10m")) |>
-#   
+# 
 #   # function to convert to EFI standard
 #   ropenmeteo::convert_to_efi_standard() |>
 #   mutate(site_id = 'fcre')
