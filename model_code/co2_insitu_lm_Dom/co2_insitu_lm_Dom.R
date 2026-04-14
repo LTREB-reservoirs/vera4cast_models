@@ -5,18 +5,18 @@ library(lubridate)
 library(vera4castHelpers)
 
 # 2. Set arguments
-my_forecast_date <- Sys.Date()
-my_model_id <- 'Dom_CO2_Model'
+my_forecast_date <- Sys.Date() - lubridate::days(1)
+my_model_id <- 'co2_insitu_lm_Dom'
 
 # 3. Source the math function from your R folder
-source('/vera4cast_models/R/co2_insitu_lm_Dom/CO2_model_function.R')
+source('./R/co2_insitu_lm_Dom/CO2_model_function.R')
 
 # 4. Run the function!
-final_forecast <- CO2_model_function(forecast_date = my_forecast_date, model_id = my_model_id)
+final_forecast <- Dom_CO2model_function(forecast_date = my_forecast_date, model_id = my_model_id)
 
-# View the results
-print(head(final_forecast))
+# save and submit
+write.csv(final_forecast, './model_output/Dom_Co2/CO2_df.csv')
 
-#  Save it to submit
-# file_name <- paste0("vera4cast-", my_model_id, "-", my_forecast_date, ".csv")
-# write_csv(final_forecast, file_name)
+vera4castHelpers::forecast_output_validator('./model_output/Dom_Co2/CO2_df.csv')
+
+vera4castHelpers::submit('./model_output/Dom_Co2/CO2_df.csv', s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)

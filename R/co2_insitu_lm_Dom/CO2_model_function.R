@@ -2,6 +2,8 @@
 
 Dom_CO2model_function <- function(forecast_date, model_id) {
   
+  forecast_start_date <- forecast_date
+  
   # --- 1. Variables & Setup ---
   focal_sites <- c("fcre")
   target_variable <- "CO2_umolL_sample"
@@ -90,7 +92,7 @@ Dom_CO2model_function <- function(forecast_date, model_id) {
       forecast_total_unc <- forecast_total_unc |> rows_update(temp_pred, by = c("forecast_date","ensemble_member","forecast_variable","uc_type"))
     }
     
-    curr_site_df <- forecast_total_unc |> filter(forecast_date > forecast_date) |> rename(datetime = forecast_date, parameter = ensemble_member, prediction = value) |> mutate(site_id = curr_site, variable = target_variable, depth_m = 0.1) |> select(datetime, site_id, depth_m, parameter, prediction, variable)
+    curr_site_df <- forecast_total_unc |> filter(forecast_date > forecast_start_date) |> rename(datetime = forecast_date, parameter = ensemble_member, prediction = value) |> mutate(site_id = curr_site, variable = target_variable, depth_m = 0.1) |> select(datetime, site_id, depth_m, parameter, prediction, variable)
     forecast_df <- dplyr::bind_rows(forecast_df, curr_site_df)
   }
   
