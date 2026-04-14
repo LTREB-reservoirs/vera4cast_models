@@ -36,7 +36,7 @@ example_CH4_model <- function(forecast_date, model_id, horizon,
     parameter  = as.character(future_weather_model$parameter),
     prediction = future_weather_model$prediction,
     variable   = forecast_variable,
-    depth_m    = NA_real_
+    depth_m    = NA
   )
   
   CH4_sd <- CH4_mean |>
@@ -44,7 +44,7 @@ example_CH4_model <- function(forecast_date, model_id, horizon,
            parameter  = "sd")
   
   CH4_lm_forecast <- bind_rows(CH4_mean, CH4_sd) |>
-    mutate(parameter = ifelse(parameter == "sd", NA_real_, as.numeric(parameter)))
+    mutate(parameter = ifelse(parameter == "sd", NA, as.numeric(parameter)))
   
   CH4_lm_forecast_standard <- CH4_lm_forecast |>
     mutate(
@@ -52,7 +52,7 @@ example_CH4_model <- function(forecast_date, model_id, horizon,
       reference_datetime = as.POSIXct(forecast_date, tz = "UTC"),
       family             = 'ensemble',
       duration           = 'P1D',
-      depth_m            = NA_real_,
+      depth_m            = NA,
       project_id         = project_id
     ) |>
     select(datetime, reference_datetime, site_id, duration, family,

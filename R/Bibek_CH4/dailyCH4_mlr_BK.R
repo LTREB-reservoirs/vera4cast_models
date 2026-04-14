@@ -3,9 +3,9 @@ pacman::p_load(readr, tidyverse, openair, ggplot2, dplyr, lattice, arrow, magick
 
 
 # SETUP 
-forecast_date <- as.Date('2025-07-25')
-horizon       <- 30
-max_horizon   <- forecast_date + days(horizon)
+forecast_date <- Sys.Date()
+horizon <- 30
+max_horizon <- forecast_date + days(horizon)
 
 # LOAD SITE METADATA
 site_list <- read_csv("https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast/main/vera4cast_field_site_metadata.csv",
@@ -72,43 +72,22 @@ future_weather <- noaa_stage3() |>
 
 # SOURCE MODEL FUNCTION
 #Github source
-source("https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast_models/main/R/Bibek_CH4/example_CH4_model_unc.R")
+source("./R/Bibek_CH4/example_CH4_model_unc.R")
 
 # RUN MODEL
-reforecast_df <- example_CH4_model(
-                                  forecast_date     = forecast_date,
-                                  model_id          = 'beebake_CH4flux_ID',
-                                  horizon           = horizon,
+forecast_df <- example_CH4_model(forecast_date = forecast_date,
+                                   model_id = 'beebake_CH4flux_ID',
+                                  horizon = horizon,
                                   forecast_variable = 'CH4flux_umolm2s_mean',
-                                  site              = 'fcre',
-                                  project_id        = 'vera4cast'
-)
-
-# GENERATE SCORES
-targets_compare_df <- targets |>
-                           filter(site_id  == 'fcre',
-                           variable == 'CH4flux_umolm2s_mean')
-
-#Github source
-source("https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast_models/main/R/scoring/generate_forecast_score.R")
-
-reforecast_score_df <- generate_forecast_score(
-                           targets_df  = targets_compare_df,
-                           forecast_df = reforecast_df
-)
-
-# PLOT MODEL PERFORMANCE
-#Github source
-source("https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast_models/main/templates/plot_function.R")
-
-generate_forecast_plot(
-                     score_df = reforecast_score_df,
-                     y_limits = c(-0.05,0.1)
-)
+                                  site = 'fcre',
+                                  project_id = 'vera4cast')
 
 
+write.csv(forecast_df, './model_output/Bibek_CH4/ch4_df.csv')
 
+vera4castHelpers::forecast_output_validator('./model_output/Bibek_cH4/ch4_df.csv')
 
+vera4castHelpers::submit('./model_output/Bibek_cH4/ch4_df.csv', s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
 
 
 
