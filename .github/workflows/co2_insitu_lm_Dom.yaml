@@ -1,6 +1,6 @@
 on:
   #schedule:
-   # - cron: '0 15 * * *' ## UNCOMMENT THIS WHEN READY FOR AUTOMATION
+    - cron: '0 15 * * *' ## UNCOMMENT THIS WHEN READY FOR AUTOMATION
   workflow_dispatch:
 
 
