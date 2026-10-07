@@ -26,7 +26,7 @@ from src.helper_utils import load_config
 from src.torch_bmi import bmi_lstm
 from vera4cast_format import to_vera4cast, write_vera4cast
 
-# Model root (model_code/chla_lstm_ed_cmal/); config paths are relative to it.
+# Model root (model_code/chla_lstm_ed/); config paths are relative to it.
 MODEL_DIR = Path(__file__).resolve().parents[1]
 
 
