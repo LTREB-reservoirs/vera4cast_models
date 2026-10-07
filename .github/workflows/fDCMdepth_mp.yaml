@@ -1,10 +1,10 @@
 on:
-  schedule:
-    - cron: '0 15 * * *' ## UNCOMMENT THIS WHEN READY FOR AUTOMATION
+  #schedule:
+   # - cron: '0 15 * * *' ## UNCOMMENT THIS WHEN READY FOR AUTOMATION
   workflow_dispatch:
 
 
-name: spcond_AR_abp ## POPULATE THIS WITH YOUR MODEL ID
+name: YOUR_EXAMPLE_WORKFLOW ## POPULATE THIS WITH YOUR MODEL ID
 
 jobs:
   docker:
@@ -20,9 +20,9 @@ jobs:
       - name: Install
         shell: Rscript {0}
         run: |
-          install.packages(c("zoo")) ## POPULATE THIS WITH ANY SPECIFIC PACKAGES YOU NEED
+          install.packages(c("YOUR NEEDED PACKAGES")) ## POPULATE THIS WITH ANY SPECIFIC PACKAGES YOU NEED
 
       - name: Generate forecasts
         shell: Rscript {0}
         run: |
-          source("model_code/spcond_ar_abp/model_workflow.R") ## POPULATE THIS WITH THE PATH TO YOUR CODE
+          source("model_code/YOUR_MODEL_ID/YOUR_MODEL_SCRIPT.R") ## POPULATE THIS WITH THE PATH TO YOUR CODE
