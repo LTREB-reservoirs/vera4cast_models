@@ -6,9 +6,10 @@
 # rerun any forecasts missed in the past month.
 #
 # Usage (from the vera4cast_models root):
-#   uv run --project model_code/chla_lstm_ed_cmal/environment \
-#     python model_code/chla_lstm_ed_cmal/chla_lstm_workflow.py [YYYY-MM-DD]
+#   uv run --project model_code/chla_lstm_ed/environment \
+#     python model_code/chla_lstm_ed/chla_lstm_workflow.py [YYYY-MM-DD] [--no-reruns]
 
+import argparse
 import datetime as dt
 import sys
 import traceback
@@ -21,7 +22,7 @@ sys.path.insert(0, str(MODEL_DIR / "python"))
 
 from forecast import run_forecast  # noqa: E402
 
-challenge_model_name = "chla_lstm_ed_cmal"
+challenge_model_name = "chla_lstm_ed"
 config_file = MODEL_DIR / "config" / "model_config.yml"
 out_dir = MODEL_DIR.parents[1] / "model_output" / challenge_model_name
 lookback_days = 30
@@ -53,12 +54,24 @@ def make_forecast(forecast_date: dt.date) -> bool:
 
 
 def main() -> None:
-    today = dt.date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else dt.date.today()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("forecast_start", nargs="?", default=None,
+                        help="forecast reference date, e.g. 2026-10-07 (default: today)")
+    parser.add_argument("--no-reruns", action="store_true",
+                        help="only make the forecast_start forecast; skip the missed-forecast check")
+    args = parser.parse_args()
+
+    today = dt.date.fromisoformat(args.forecast_start) if args.forecast_start else dt.date.today()
     failed = []
 
     print(f"==== Generating forecast for {today} ====")
     if not make_forecast(today):
         failed.append(today)
+
+    if args.no_reruns:
+        print("Reruns disabled; skipping missed-forecast check")
+        report(failed)
+        return
 
     # check for any missing forecasts
     print("==== Checking for missed forecasts ====")
@@ -85,6 +98,10 @@ def main() -> None:
     else:
         print("NO MISSING FORECASTS FOUND")
 
+    report(failed)
+
+
+def report(failed: list[dt.date]) -> None:
     if failed:
         print(f"Forecasts failed for: {', '.join(str(d) for d in failed)}")
         sys.exit(1)

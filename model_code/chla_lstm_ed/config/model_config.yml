@@ -3,13 +3,13 @@ verbose: True
 email: jzwart@usgs.gov # for dynamical.org tracking
 
 # -- data inputs and run directories ----------------------------
-# Paths are relative to model_code/chla_lstm_ed_cmal/ (forecast.py runs from there).
+# Paths are relative to model_code/chla_lstm_ed/ (forecast.py runs from there).
 # Only model_files/ (trained weights, scalers, static features) and the
 # forecast_data_file are used for operational forecasts; the other local files
 # below are training inputs that aren't part of this deployment.
 root_dir:
 train_dir: "model_files/model_train/"
-forecast_dir: "../../model_output/chla_lstm_ed_cmal/"
+forecast_dir: "../../model_output/chla_lstm_ed/"
 data_in_dir: "model_files/"
 
 target_data_file: "in/observations/obs_forecast_sites.csv"
@@ -227,7 +227,7 @@ h_sd: 0.02 # initial standard deviation of hidden states
 c_sd: 0.06 # initial standard deviation of cell states
 produce_ensembles: False # T/F if the model should produce ensembles (samples from the distribution) in addition to the parameters of the distribution
 n_samples: 100 # how many samples to draw from the learned distribution (also the VERA4cast submission ensemble size)
-vera4cast_model_id: "chla_lstm_ed_cmal" # registered VERA4cast model_id used in submissions (forecast.py / vera4cast_format.py)
+vera4cast_model_id: "chla_lstm_ed" # registered VERA4cast model_id used in submissions (forecast.py / vera4cast_format.py)
 #sample_reduction: 'mean' # how to reduce the samples to a point estimate (mode or mean)
 n_segs: 1 # TODO: this should be dynamic based on the model but making a configuration for now
 

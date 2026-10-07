@@ -7,12 +7,17 @@ on:
         description: "Forecast reference date (YYYY-MM-DD); blank = today (UTC)"
         required: false
         default: ""
+      reruns:
+        description: "Also rerun forecasts missed in the past month"
+        type: boolean
+        required: false
+        default: false
 
 
-name: chla_lstm_ed_cmal
+name: chla_lstm_ed
 
 env:
-  MODEL_ID: chla_lstm_ed_cmal
+  MODEL_ID: chla_lstm_ed
 
 jobs:
   # The model is pure Python (PyTorch), so run it directly with uv rather than
@@ -59,9 +64,14 @@ jobs:
       - name: Generate forecasts
         env:
           FORECAST_START: ${{ inputs.forecast_start }}
+          # "false" only for a manual run with the box unticked; scheduled runs
+          # have no inputs, so they always check for missed forecasts.
+          RERUNS: ${{ inputs.reruns }}
         run: |
+          RERUN_FLAG=""
+          if [ "$RERUNS" = "false" ]; then RERUN_FLAG="--no-reruns"; fi
           uv run --frozen --project model_code/${MODEL_ID}/environment \
-            python model_code/${MODEL_ID}/chla_lstm_workflow.py ${FORECAST_START}
+            python model_code/${MODEL_ID}/chla_lstm_workflow.py ${FORECAST_START} ${RERUN_FLAG}
 
       # Upload whatever was produced, even if some dates failed.
       - uses: actions/upload-artifact@v4

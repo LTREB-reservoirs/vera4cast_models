@@ -7,8 +7,8 @@
 # forecasts and does not submit anything.
 #
 # Usage (from the vera4cast_models root):
-#   uv run --project model_code/chla_lstm_ed_cmal/environment \
-#     python model_code/chla_lstm_ed_cmal/tests/test_forecast.py [YYYY-MM-DD]
+#   uv run --project model_code/chla_lstm_ed/environment \
+#     python model_code/chla_lstm_ed/tests/test_forecast.py [YYYY-MM-DD]
 
 import datetime as dt
 import sys
@@ -19,7 +19,7 @@ sys.path.insert(0, str(MODEL_DIR / "python"))
 
 from forecast import run_forecast  # noqa: E402
 
-challenge_model_name = "chla_lstm_ed_cmal"
+challenge_model_name = "chla_lstm_ed"
 config_file = MODEL_DIR / "config" / "model_config.yml"
 # Kept apart from the real submission files so test output is never submitted.
 test_dir = MODEL_DIR.parents[1] / "model_output" / challenge_model_name / "test"
