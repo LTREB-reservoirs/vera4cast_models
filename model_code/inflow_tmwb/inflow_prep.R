@@ -67,6 +67,8 @@
 #load packages
 pacman::p_load(dplyr,zoo,EcoHydRology,tidyverse,lubridate) #rMR
 
+edi_access_key = Sys.getenv('EDI_ACCESS_KEY')
+
 source('./model_code/inflow_tmwb/rMR_functions.R')
 
 inflow_prep <- function(inflow_df){
@@ -83,7 +85,7 @@ inflow_end <- max(forecasted_inflow$time)
 ## read in static datasets (edi, observation, etc.)
 
 #chemistry
-inUrl1  <- "https://pasta.lternet.edu/package/data/eml/edi/199/12/a33a5283120c56e90ea414e76d5b7ddb" 
+inUrl1  <- paste0("https://pasta.lternet.edu/package/data/eml/edi/199/12/a33a5283120c56e90ea414e76d5b7ddb?key=",edi_access_key) 
 infile1 <- tempfile()
 try(download.file(inUrl1,infile1,method="curl"))
 if (is.na(file.size(infile1))) download.file(inUrl1,infile1,method="auto")
@@ -115,7 +117,7 @@ ghg <- read.csv("./model_code/inflow_tmwb/inputs/BVR_GHG_Inflow_20200619.csv", h
   rename(time = DateTime, CAR_ch4 = ch4_umolL)
 
 #read in lab dataset of pH 
-inUrl1  <- "https://pasta.lternet.edu/package/data/eml/edi/198/13/e50a50d062ee73f4d85e4f20b360ce4f" 
+inUrl1  <- paste0("https://pasta.lternet.edu/package/data/eml/edi/198/13/e50a50d062ee73f4d85e4f20b360ce4f?key=",edi_access_key) 
 infile1 <- tempfile()
 try(download.file(inUrl1,infile1))
 
