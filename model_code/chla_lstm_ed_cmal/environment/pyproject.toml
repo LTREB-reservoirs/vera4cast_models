@@ -1,0 +1,46 @@
+[project]
+name = "habs-forecast-chl-usgsrc4cast-dl2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.12.4",
+    "async-retriever>=0.19.3",
+    "bmipy>=2.0.1",
+    "cftime>=1.6.4.post1",
+    "dask>=2025.5.1",
+    "dataretrieval>=1.1.0",
+    "hydrosignatures>=0.19.3",
+    "ipykernel>=6.29.5",
+    "jupyterlab>=4.4.3",
+    "openmeteo-requests>=1.5.0",
+    "py3dep>=0.19.0",
+    "pydaymet>=0.19.4",
+    "pygeohydro>=0.19.4",
+    "pygeoogc>=0.19.4",
+    "pygeoutils>=0.19.5",
+    "pygridmet>=0.19.4",
+    "pynhd>=0.19.4",
+    "pynldas2>=0.19.3",
+    "pytest>=9.0.2",
+    "requests>=2.32.3",
+    "requests-cache>=1.2.1",
+    "retry-requests>=2.0.0",
+    "scipy>=1.15.3",
+    "torch==2.7.0", # pinned to the version the model was trained with
+    "tqdm>=4.67.1",
+    "uncertainty-toolbox>=0.1.1",
+    "xarray[complete]>=2025.4.0",
+    "zarr>=3.0.4",
+]
+
+# CPU-only torch: the model runs with gpu: False, and the default PyPI wheel
+# pulls in ~5 GB of CUDA libraries that are never used.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

@@ -1,0 +1,235 @@
+# model configuration file
+verbose: True
+email: jzwart@usgs.gov # for dynamical.org tracking
+
+# -- data inputs and run directories ----------------------------
+# Paths are relative to model_code/chla_lstm_ed_cmal/ (forecast.py runs from there).
+# Only model_files/ (trained weights, scalers, static features) and the
+# forecast_data_file are used for operational forecasts; the other local files
+# below are training inputs that aren't part of this deployment.
+root_dir:
+train_dir: "model_files/model_train/"
+forecast_dir: "../../model_output/chla_lstm_ed_cmal/"
+data_in_dir: "model_files/"
+
+target_data_file: "in/observations/obs_forecast_sites.csv"
+
+obs_local_file: "in/observations/obs.nc"
+
+gefs_local_file: "in/gefs/gefs_analysis.nc"
+
+gefs_operational_local_file: "in/gefs/gefs_operational_2020-10-01_2025-12-31.nc"
+
+# Which backend to pull GEFS met drivers from:
+#   "dynamical"       -- raw zarr stores from data.dynamical.org (pull_gefs_analysis/
+#                         pull_gefs_operational). Covers any lat/lon, but forecast-35-day's
+#                         coarse chunking makes per-site extraction very slow.
+#   "flare_s3_stage2" -- pre-extracted per-site parquet from the FLARE-forecast OSN bucket.
+#                         Analysis driver from stage3 (historical), operational/decoder
+#                         driver from stage2 (real GEFS ensemble forecasts, one file per
+#                         reference_datetime -- many small S3 requests, but real forecast
+#                         uncertainty/skill).
+#   "flare_s3_stage3" -- same stage3 analysis driver, but the operational/decoder driver
+#                         is also derived from stage3 by locally windowing the historical
+#                         record (one S3 request total). Fast, but every "forecast" is the
+#                         actual historical trajectory with zero ensemble spread -- no real
+#                         forecast uncertainty signal.
+# All "flare_s3*" options only cover specific lake sites (e.g. fcre, bvre) and have no
+# total_cloud_cover_atmosphere equivalent (filled with NaN).
+met_data_source: "flare_s3_stage2" # "dynamical", "flare_s3_stage2", or "flare_s3_stage3"
+
+# Real-time met driver lag (used by build_forecast_data.py). The current day's met
+# drivers are not available at forecast time, so a forecast initialized on date R is
+# driven by the most recent published driver, initialized R - met_driver_lag_days.
+# 1 = yesterday's drivers (operational default). Set 0 only for hindcasts, where the
+# same-day GEFS analysis/forecast does exist.
+met_driver_lag_days: 1
+
+hydro_local_file: "in/hydro/usgs_discharge.nc"  # USGS NWIS daily discharge (previously: glofas_analysis.nc)
+
+# For sites with no USGS gauge (e.g. VERA4cast reservoirs), fall back to an inflow
+# stream's Flow_cms_mean, remapped from its site_id to the reservoir's site_id
+vera4cast_inflow_url: "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-inflow-targets.csv.gz"
+vera4cast_inflow_site_map: { "tubr": "fcre" } # Tunnel Branch inflow -> Falling Creek Reservoir
+
+# Path to noAR model predictions (used as lagged input when lag_target=True)
+# This should point to the output from a previous noAR model run
+# Example format: YYYYMMDD_lstm_noAR_sites_head_h{hidden}_preds.feather
+lstm_noAR_local_file: "in/lstm_noAR_chl/20260305_lstm_noAR_usgs-stack_CMAL_h64_preds.feather" # "in/lstm_noAR_chl/20260120_lstm_noAR_usgs-stack_CMAL_h16_preds.feather"
+
+# -- data preparations arguments -------------------------------
+spatial_idx_name: 'site_id'
+time_idx_name: 'time'
+
+sites_to_include: ["vera4cast"] # options: usgsrc4cast, savoy, stackpoole, vera4cast
+# Optional: further restrict to specific site_id values within the included datasets above
+# (e.g. "vera4cast" alone would otherwise also pull in bvre/tubr).
+site_ids_to_include: ["fcre"]
+
+# -- model identification --------------------------------------
+# Model ID is auto-generated from config settings if not explicitly set.
+# Format: YYYYMMDD_modeltype_AR/noAR_sites_head_h{hidden}[_e{enc}d{dec}]
+# Examples:
+#   - 20260107_lstm_AR_usgs-stack_CMAL_h16
+#   - 20260107_ed_AR_usgs-stack_CMAL_h16_e365d10
+#
+# Options:
+#   1. Leave model_id empty/commented to auto-generate with today's date
+#   2. Set model_date to use a specific date for auto-generation
+#   3. Set model_id explicitly to override auto-generation entirely
+model_id:  # 20260223_ed_AR_usgs-stack_CMAL_h64_e90d11 # Leave empty to auto-generate
+model_date: "2026-10-05"  # Pinned to reuse existing in/training_data/20261005_ed_noAR_vera_CMAL_h64_e90d11.npz
+
+# training data .npz files are saved to in/training_data/{model_id}.npz (derived from model_id)
+forecast_data_file: "forecast_data/forecast_data_chla.nc" # rebuilt for each reference date (git-ignored)
+
+# -- site metadata ---------------------------------------------
+#site_metadata_url: "https://raw.githubusercontent.com/eco4cast/usgsrc4cast-ci/main/USGS_site_metadata.csv"
+site_metadata_url: "https://raw.githubusercontent.com/LTREB-reservoirs/vera4cast/main/vera4cast_field_site_metadata.csv"
+savoy_metadata_file: "in/savoy_dataset/site information.txt"
+stackpoole_metadata_file: "in/stackpoole_dataset/site_metadata.csv"
+
+# -- target data ----------------------------------------------
+#target_url: "https://sdsc.osn.xsede.org/bio230014-bucket01/challenges/targets/project_id=usgsrc4cast/duration=P1D/river-chl-targets.csv.gz"
+target_url: "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+savoy_data_file: "in/savoy_dataset/model inputs and outputs.txt"
+stackpoole_data_file: "in/stackpoole_dataset/wrtds_resids_ewi.csv"
+
+# --- training variables ----------------------------------------
+# see variables from https://dynamical.org/catalog/noaa-gefs-analysis/
+x_vars: ["downward_long_wave_radiation_flux_surface", "downward_short_wave_radiation_flux_surface", "maximum_temperature_2m", "minimum_temperature_2m", "precipitation_surface", "temperature_2m", "total_cloud_cover_atmosphere", "wind_u_10m", "wind_v_10m"]
+# 2025-11-19: maybe also consider including "pressure_surface" and "relative_humidity_2m"
+
+hydro_vars: ["river_discharge"] #, "river_discharge_p25"] # , "river_discharge_min", "river_discharge_max", "river_discharge_p75", "river_discharge_median"]
+
+x_vars_static: ["pctcrop2019", "pctimp2019", "p_ags_2017", "n_ags_2017", "wwtpalldens", "elev", "rddens", "bfi", "runoff"]
+
+# 'chla' is the only available target variable
+y_vars: ["chla"]
+
+# Log-transform target variable before training
+# When True: model trains on log(chla), predictions are back-transformed via exp()
+# Benefits: equalizes relative errors across the concentration range,
+#           helps prevent underprediction of high values
+log_transform_target: False  # NOTE: use True for lstm noAR/AR; change back to False for encoder_decoder
+
+# how many days to do autoregressive
+lag_target: False # boolean for lagging target variable or not (uses gap-filled noAR predictions)
+lag_days: 0 # keep this at 0 for encoder-decoder; use 1 if LSTM
+
+# Real-time chla lag (independent of lag_target). When True, chla_lagged /
+# chla_uncertainty_lagged are built from observed VERA4cast "Chla_ugL_mean"
+# instead of the noAR-model predictions in lstm_noAR_local_file. Useful for
+# operational inference, where the encoder needs chla history past max_date.
+chla_lag: False # boolean for lagging chla from real-time observed data
+chla_lag_days: 1 # lag offset in days (kept separate from lag_days, which is 0 for encoder-decoder)
+vera4cast_chla_url: "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
+
+# ----- training dates ------------------------------------------
+# NOTE: For encoder_decoder, min_date/start_date_train should be "2020-10-01" (GEFS operational
+# start) so decoder PI90 correlates with actual forecast error during training.
+# For lstm (noAR/AR), use the full GEFS analysis history (back to 2009-01-01) to maximize
+# training sequences. Pre-2020 data uses climatology PI90 fallback (high uncertainty signal).
+min_date: "2020-10-01" # GEFS analysis start date (use "2020-10-01" for encoder_decoder)
+max_date: "2025-12-31" # maximum date for data pull
+
+# use "2020-10-01" for encoder_decoder
+start_date_train: ["2020-10-01", "2025-01-01"]
+end_date_train:   ["2022-12-31", "2025-12-31"]
+
+start_date_val: "2024-01-01"
+end_date_val: "2024-12-31"
+
+start_date_test: "2023-01-01"
+end_date_test: "2023-12-31"
+
+# -- training options --------------------------------------------
+model_type: "encoder_decoder" # What type of model to run: "lstm" or "encoder_decoder"
+
+# -- encoder-decoder architecture settings -----------------------
+# Only used when model_type: "encoder_decoder"
+encoder_seq_len: 90  # Days of historical observations for encoder
+decoder_seq_len: 11   # Days of forecast horizon for decoder (days 0-10, should match f_horizon)
+
+# Autoregressive decoder: when lag_target=True, chla_lagged is added to decoder inputs
+# and the model feeds its own predictions back as lagged input during training/inference.
+# This attempts to eliminate the encoder-decoder feature discontinuity that causes U-shaped RMSE.
+# Set to False to use teacher forcing (actual obs for lagged values during training).
+decoder_autoregressive: False
+
+# Residual state transfer: when True, uses residual connections for encoder-to-decoder state transfer.
+# Standard (False): c_dec = W @ c_enc + b (full transformation)
+# Residual (True):  c_dec = c_enc + W @ c_enc (identity + learned adjustment)
+# Residual connections make it easier to learn "pass through unchanged" and provide
+# direct gradient paths, which may help with the U-shaped RMSE issue.
+residual_state_transfer: False
+
+# Encoder input variables (past observations)
+# By default, uses x_vars + hydro_vars + x_vars_static (+ lag vars if lag_target=True)
+# Decoder input variables (future forecasts)
+# By default, uses x_vars + x_vars_static + PI90 vars (+ lag vars if lag_target=True)
+# Set decoder_include_static: False to exclude static features from decoder (they remain in encoder)
+decoder_include_static: True # seems to be better with static features in decoder; 2026-03-02
+
+pre_train: False # T/F if to pre-train with ____
+fine_tune: True # T/F if to do fine-tune training on observations
+
+mc_dropout: False # T/F to include monte carlo dropout estimates
+recurrent_dropout_rate: 0
+dropout_rate: 0
+
+n_en_gridmet: 1 # number of driver ensembles / segment when using gridMET
+
+learn_rate_pre: 0.001   # NOTE: use 0.001 for lstm; use 0.001 for encoder_decoder
+learn_rate_fine: 0.001  # NOTE: use 0.001 for lstm; use 0.001 for encoder_decoder
+n_epochs_pre: 5 # number of epochs for pretraining
+n_epochs_fine: 1000 # number of epochs for finetuning
+early_stopping_patience: 50 # number of epochs allowed for when it's not getting any better at training
+hidden_units: 64 # number of hidden units
+gpu: False # whether or not to use gpu, our small model doesn't benefit atm from GPU
+head: "CMAL" #"GMM" # what type of nn layer to use on top of the primary model for producing output/UQ
+weight_loss: False # Indicates whether to apply weighting tto the observations in the loss function (True) or not (False).
+weight_threshold: 22  # Temperature threshold above which observations will be given higher weight in the loss function. Observations below this threshold will be weighted less.
+weight_value: 5  # Specifies the weighting factor for observations exceeding the threshold. A value of 2 means these observations will contribute twice as much to the loss as those below the threshold.
+head_hidden_units: 16 # number of hidden units in head layer, if not regression
+head_n_distr: 1 # number of distributions to use if mixture density approach/not regression
+umal_extend_batch: False # if UMAL, indicate Whether the batches should be extended n_taus times,
+#  to account for a specific approximation density already during the training
+umal_tau_min: 0.25 # if UMAL, lower limit on tau/asymmetry sampling. Bound = 0
+umal_tau_max: 0.75 # if UMAL, upper limit on tau/asymmetry sampling. Bound = 1
+
+# -- forecasting options ------------------------------------------
+f_horizon: 11 # forecast horizon in days (days 0-10, where day 0 = reference_date)
+# NOTE: with met_driver_lag_days: 1, day 0 (the reference date) is driven by the
+# yesterday-initialized stage2 forecast, so it is a real 1-day-ahead driver rather
+# than the (unavailable) same-day one.
+lead_times: "11d"
+
+# Forecast uncertainty settings (Goal 3: Forecast Driver Uncertainty)
+include_forecast_uncertainty: False  # NOTE: use False for lstm noAR/AR; use True for encoder_decoder
+climatology_pi90_multiplier: 4.0  # Multiplier for std to get PI90 for climatology fallback (4.0 = ~2 std each side)
+
+# Observation uncertainty settings (Goal 2: Observation Uncertainty in Loss)
+# When enabled, the loss function accounts for observation uncertainty using Monte Carlo integration
+# Observation PI90 is calculated as: PI90 = 3.29 × 0.05 × measurement (constant 5% CV)
+use_obs_uncertainty_in_loss: False  # Set to True to use observation uncertainty in CMAL loss
+obs_uncertainty_n_mc_samples: 1000  # Number of Monte Carlo samples for loss integration
+
+store_raw_states: True # T/F store the LSTM states without data assimilation
+store_forecasts: True # T/F store predictions that are in the future
+force_pos: False # T/F force estimates to be positive; seems like forcing positive is detrimental to accuracy
+update_h: False # T/F update the hidden state with DA
+update_c: True # T/F update the cell state with DA
+da_localization: False # T/F for adding localization mask during DA routine
+
+temp_obs_sd: .5 # standard deviation of temperature observations
+h_sd: 0.02 # initial standard deviation of hidden states
+c_sd: 0.06 # initial standard deviation of cell states
+produce_ensembles: False # T/F if the model should produce ensembles (samples from the distribution) in addition to the parameters of the distribution
+n_samples: 100 # how many samples to draw from the learned distribution (also the VERA4cast submission ensemble size)
+vera4cast_model_id: "chla_lstm_ed_cmal" # registered VERA4cast model_id used in submissions (forecast.py / vera4cast_format.py)
+#sample_reduction: 'mean' # how to reduce the samples to a point estimate (mode or mean)
+n_segs: 1 # TODO: this should be dynamic based on the model but making a configuration for now
+
+# -- other config ------------------------------------------------
+seed: 4

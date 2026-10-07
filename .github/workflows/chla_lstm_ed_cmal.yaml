@@ -1,0 +1,103 @@
+on:
+  #schedule:
+   # - cron: '0 15 * * *' ## UNCOMMENT THIS WHEN READY FOR AUTOMATION
+  workflow_dispatch:
+    inputs:
+      forecast_start:
+        description: "Forecast reference date (YYYY-MM-DD); blank = today (UTC)"
+        required: false
+        default: ""
+
+
+name: chla_lstm_ed_cmal
+
+env:
+  MODEL_ID: chla_lstm_ed_cmal
+
+jobs:
+  # The model is pure Python (PyTorch), so run it directly with uv rather than
+  # wrapping it in R. The workflow script also reruns any forecasts missed in
+  # the past month.
+  forecast:
+    runs-on: ubuntu-latest
+    env:
+      # Fixed location for the Python uv downloads, so it can be cached with .venv.
+      UV_PYTHON_INSTALL_DIR: ${{ github.workspace }}/.uv-python
+    steps:
+      - uses: actions/checkout@v4
+
+      # uv installs the Python version pinned in environment/.python-version.
+      - uses: astral-sh/setup-uv@v6
+
+      # Reuse the environment from earlier runs. The key changes whenever
+      # uv.lock or the Python version changes, which forces a fresh build.
+      # The interpreter (.uv-python) is cached too because .venv links to it.
+      - name: Restore Python environment
+        id: venv-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            model_code/${{ env.MODEL_ID }}/environment/.venv
+            .uv-python
+          key: chla-venv-${{ runner.os }}-${{ hashFiles(format('model_code/{0}/environment/uv.lock', env.MODEL_ID), format('model_code/{0}/environment/.python-version', env.MODEL_ID)) }}
+
+      # A no-op check on a cache hit; a full install otherwise.
+      - name: Install
+        run: uv sync --frozen --project model_code/${MODEL_ID}/environment
+
+      # Save right after installing (not at the end of the job), so the
+      # environment is kept even if some forecast dates fail below.
+      - name: Save Python environment
+        if: steps.venv-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            model_code/${{ env.MODEL_ID }}/environment/.venv
+            .uv-python
+          key: ${{ steps.venv-cache.outputs.cache-primary-key }}
+
+      - name: Generate forecasts
+        env:
+          FORECAST_START: ${{ inputs.forecast_start }}
+        run: |
+          uv run --frozen --project model_code/${MODEL_ID}/environment \
+            python model_code/${MODEL_ID}/chla_lstm_workflow.py ${FORECAST_START}
+
+      # Upload whatever was produced, even if some dates failed.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: forecast
+          path: model_output/${{ env.MODEL_ID }}/daily-*.csv.gz
+          if-no-files-found: warn
+          retention-days: 7
+
+  # Validation and submission use vera4castHelpers, which is already in the R
+  # container the other models run in.
+  submit:
+    needs: forecast
+    if: ${{ always() && needs.forecast.result != 'cancelled' }}
+    runs-on: ubuntu-latest
+    container: rqthomas/vera-rocker:latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: forecast
+          path: forecast
+
+      - name: Submit forecasts
+        shell: Rscript {0}
+        run: |
+          forecast_files <- list.files("forecast", pattern = "^daily-.*\\.csv\\.gz$", full.names = TRUE)
+          if (length(forecast_files) == 0) stop("No forecast files to submit")
+
+          for (forecast_file in forecast_files) {
+            message("Submitting ", basename(forecast_file))
+            vera4castHelpers::forecast_output_validator(forecast_file)
+            vera4castHelpers::submit(forecast_file, s3_region = "submit", s3_endpoint = "ltreb-reservoirs.org", first_submission = FALSE)
+          }
