@@ -95,6 +95,7 @@ def build_chla_lag(
         lag_days: int = 1,
         site_ids: list | None = None,
         variable: str = CHLA_VARIABLE,
+        max_fill_days: int = 7,
 ) -> xr.Dataset:
     """Build ``chla_lagged`` / ``chla_uncertainty_lagged`` features from real-time chla.
 
@@ -102,6 +103,12 @@ def build_chla_lag(
     that at time ``t`` the feature holds chla observed at ``t - lag_days``. The
     returned dataset covers ``[start_time, end_time]``; ``lag_days`` of extra
     history is pulled internally so the first requested day has a lagged value.
+
+    Missing days (sensor gaps, or the latest days not yet published) are
+    forward-filled from the last observation for up to ``max_fill_days``. The fill
+    is causal -- it never uses later observations -- so training sees exactly what
+    is available at forecast time; longer gaps stay NaN (filled with the training
+    mean downstream).
     """
     lag_days = int(lag_days)
     start_ts = pd.to_datetime(start_time)
@@ -109,11 +116,14 @@ def build_chla_lag(
 
     chla = pull_vera4cast_chla(
         url=url,
-        start_time=start_ts - pd.Timedelta(days=lag_days),
+        start_time=start_ts - pd.Timedelta(days=lag_days + max_fill_days),
         end_time=end_ts,
         site_ids=site_ids,
         variable=variable,
     )
+    # Regular daily axis through end_time so trailing unpublished days exist to fill.
+    full_time = pd.date_range(start_ts - pd.Timedelta(days=lag_days + max_fill_days), end_ts, freq="D")
+    chla = chla.reindex(time=full_time).ffill("time", limit=max_fill_days)
     chla = chla.assign(chla_uncertainty=lambda ds: _PI90_FROM_SD * _OBS_CV * np.abs(ds["chla"]))
 
     lagged = (

@@ -1,14 +1,19 @@
 # model configuration file
 verbose: True
-email: jzwart@usgs.gov # for dynamical.org tracking
+email: addelany@vt.edu # for dynamical.org tracking
 
 # -- data inputs and run directories ----------------------------
-# Paths are relative to model_code/chla_lstm_ed/ (forecast.py runs from there).
-# Only model_files/ (trained weights, scalers, static features) and the
-# forecast_data_file are used for operational forecasts; the other local files
-# below are training inputs that aren't part of this deployment.
 root_dir:
+# Deployment copy of LaplaceDistributionChlaForecast/model_config.yml: identical model
+# settings, with paths relative to model_code/chla_lstm_ed/ (forecast.py runs from
+# there). Only model_files/ (trained weights, scalers, static features) and the
+# forecast_data_file are used for operational forecasts; the gefs_*_local_file
+# entries below are training inputs that aren't part of this deployment.
+# Model files for the previous deployed model (20261005_ed_noAR_vera_CMAL_h64_e90d11)
+# are kept in model_files/ for rollback, but its settings differ (11-day horizon,
+# 64 hidden units, no chla inputs), so rolling back needs its config too.
 train_dir: "model_files/model_train/"
+training_data_dir: "model_files/training_data/"
 forecast_dir: "../../model_output/chla_lstm_ed/"
 data_in_dir: "model_files/"
 
@@ -16,9 +21,15 @@ target_data_file: "in/observations/obs_forecast_sites.csv"
 
 obs_local_file: "in/observations/obs.nc"
 
-gefs_local_file: "in/gefs/gefs_analysis.nc"
+# Encoder (analysis) met for training. With met_data_source flare_s3_stage2,
+# get_met_data_local.py pulls FLARE stage3 -- the same source build_forecast_data.py
+# uses for the encoder at inference. The previous dynamical.org analysis (which the
+# 20261005 model was trained on) is in/gefs/gefs_analysis.nc.
+gefs_local_file: "in/gefs/gefs_analysis_flare_stage3.nc"
 
-gefs_operational_local_file: "in/gefs/gefs_operational_2020-10-01_2025-12-31.nc"
+# stage2 (real GEFS ensemble) decoder training drivers, 35-day horizon. The previous
+# stage3-windowed file is in/gefs/gefs_operational_2020-10-01_2025-12-31.nc.
+gefs_operational_local_file: "in/gefs/gefs_operational_stage2_35d_2020-10-01_2025-12-31.nc"
 
 # Which backend to pull GEFS met drivers from:
 #   "dynamical"       -- raw zarr stores from data.dynamical.org (pull_gefs_analysis/
@@ -35,14 +46,24 @@ gefs_operational_local_file: "in/gefs/gefs_operational_2020-10-01_2025-12-31.nc"
 #                         actual historical trajectory with zero ensemble spread -- no real
 #                         forecast uncertainty signal.
 # All "flare_s3*" options only cover specific lake sites (e.g. fcre, bvre) and have no
-# total_cloud_cover_atmosphere equivalent (filled with NaN).
+# total_cloud_cover_atmosphere equivalent (NaN unless cloud_cover_source fills it).
 met_data_source: "flare_s3_stage2" # "dynamical", "flare_s3_stage2", or "flare_s3_stage3"
 
-# Real-time met driver lag (used by build_forecast_data.py). The current day's met
-# drivers are not available at forecast time, so a forecast initialized on date R is
-# driven by the most recent published driver, initialized R - met_driver_lag_days.
-# 1 = yesterday's drivers (operational default). Set 0 only for hindcasts, where the
-# same-day GEFS analysis/forecast does exist.
+# Fill total_cloud_cover_atmosphere, which FLARE lacks, from dynamical.org's NOAA GEFS
+# zarr stores: the analysis for encoder (stage3) history and the 35-day forecast for
+# decoder (stage2) drivers, same init dates. Used by get_met_data_local.py,
+# get_forecasted_met_data_local.py and build_forecast_data.py; requests carry `email`
+# for dynamical.org usage tracking. If dynamical.org can't be reached, cloud cover
+# stays NaN (treated as an unavailable feature). Leave empty to disable.
+cloud_cover_source: "dynamical"
+
+# Real-time met driver lag. The current day's met drivers are not available at
+# forecast time, so a forecast initialized on date R is driven by the most recent
+# published driver, initialized R - met_driver_lag_days. 1 = yesterday's drivers
+# (operational default). Used both by build_forecast_data.py (operational) and by
+# data_prep_encoder_decoder (training), so the decoder sees the same driver age in
+# training as in operation. Set 0 only for hindcasts, where the same-day GEFS
+# forecast does exist.
 met_driver_lag_days: 1
 
 hydro_local_file: "in/hydro/usgs_discharge.nc"  # USGS NWIS daily discharge (previously: glofas_analysis.nc)
@@ -77,10 +98,14 @@ site_ids_to_include: ["fcre"]
 #   1. Leave model_id empty/commented to auto-generate with today's date
 #   2. Set model_date to use a specific date for auto-generation
 #   3. Set model_id explicitly to override auto-generation entirely
-model_id:  # 20260223_ed_AR_usgs-stack_CMAL_h64_e90d11 # Leave empty to auto-generate
-model_date: "2026-10-05"  # Pinned to reuse existing in/training_data/20261005_ed_noAR_vera_CMAL_h64_e90d11.npz
+# Explicit because the auto-generated ID only reflects lag_target ("noAR"), not chla_lag.
+# Previous runs: 20261008_ed_chlalag_vera_CMAL_h64_e90d34 (chla history only),
+# 20261008_ed_noAR_vera_CMAL_h64_e90d34 (no chla history), 20261005_..._e90d11.
+model_id: "20261008_ed_chlalast_vera_CMAL_h16_e90d34"
+model_date: "2026-10-08"  # stage2 + 34-day + 1-day met lag retrain -> 20261008_ed_noAR_vera_CMAL_h64_e90d34
+# Previous model: "2026-10-05" -> 20261005_ed_noAR_vera_CMAL_h64_e90d11 (stage3, 11 days, no training lag)
 
-# training data .npz files are saved to in/training_data/{model_id}.npz (derived from model_id)
+# training data .npz files are saved to {training_data_dir}/{model_id}.npz (derived from model_id)
 forecast_data_file: "forecast_data/forecast_data_chla.nc" # rebuilt for each reference date (git-ignored)
 
 # -- site metadata ---------------------------------------------
@@ -121,7 +146,7 @@ lag_days: 0 # keep this at 0 for encoder-decoder; use 1 if LSTM
 # chla_uncertainty_lagged are built from observed VERA4cast "Chla_ugL_mean"
 # instead of the noAR-model predictions in lstm_noAR_local_file. Useful for
 # operational inference, where the encoder needs chla history past max_date.
-chla_lag: False # boolean for lagging chla from real-time observed data
+chla_lag: True # boolean for lagging chla from real-time observed data (gaps forward-filled up to 7 days, causal)
 chla_lag_days: 1 # lag offset in days (kept separate from lag_days, which is 0 for encoder-decoder)
 vera4cast_chla_url: "https://amnh1.osn.mghpcc.org/bio230121-bucket01/vera4cast/targets/project_id=vera4cast/duration=P1D/daily-insitu-targets.csv.gz"
 
@@ -149,13 +174,18 @@ model_type: "encoder_decoder" # What type of model to run: "lstm" or "encoder_de
 # -- encoder-decoder architecture settings -----------------------
 # Only used when model_type: "encoder_decoder"
 encoder_seq_len: 90  # Days of historical observations for encoder
-decoder_seq_len: 11   # Days of forecast horizon for decoder (days 0-10, should match f_horizon)
+decoder_seq_len: 34   # Days of forecast horizon for decoder (days 0-33, should match f_horizon)
 
 # Autoregressive decoder: when lag_target=True, chla_lagged is added to decoder inputs
 # and the model feeds its own predictions back as lagged input during training/inference.
 # This attempts to eliminate the encoder-decoder feature discontinuity that causes U-shaped RMSE.
 # Set to False to use teacher forcing (actual obs for lagged values during training).
 decoder_autoregressive: False
+
+# Give the decoder the last observed chla available at forecast time (the final
+# encoder day's chla_lagged) on every forecast day, so forecasts start from the
+# current state (persistence) and learn corrections. Needs chla_lag or lag_target.
+decoder_last_chla: True
 
 # Residual state transfer: when True, uses residual connections for encoder-to-decoder state transfer.
 # Standard (False): c_dec = W @ c_enc + b (full transformation)
@@ -176,7 +206,7 @@ fine_tune: True # T/F if to do fine-tune training on observations
 
 mc_dropout: False # T/F to include monte carlo dropout estimates
 recurrent_dropout_rate: 0
-dropout_rate: 0
+dropout_rate: 0.3 # input dropout in encoder/decoder LSTMs (was 0; added to curb overfitting after ~3 epochs)
 
 n_en_gridmet: 1 # number of driver ensembles / segment when using gridMET
 
@@ -185,7 +215,7 @@ learn_rate_fine: 0.001  # NOTE: use 0.001 for lstm; use 0.001 for encoder_decode
 n_epochs_pre: 5 # number of epochs for pretraining
 n_epochs_fine: 1000 # number of epochs for finetuning
 early_stopping_patience: 50 # number of epochs allowed for when it's not getting any better at training
-hidden_units: 64 # number of hidden units
+hidden_units: 16 # number of hidden units (was 64; reduced to curb overfitting)
 gpu: False # whether or not to use gpu, our small model doesn't benefit atm from GPU
 head: "CMAL" #"GMM" # what type of nn layer to use on top of the primary model for producing output/UQ
 weight_loss: False # Indicates whether to apply weighting tto the observations in the loss function (True) or not (False).
@@ -199,11 +229,12 @@ umal_tau_min: 0.25 # if UMAL, lower limit on tau/asymmetry sampling. Bound = 0
 umal_tau_max: 0.75 # if UMAL, upper limit on tau/asymmetry sampling. Bound = 1
 
 # -- forecasting options ------------------------------------------
-f_horizon: 11 # forecast horizon in days (days 0-10, where day 0 = reference_date)
+f_horizon: 34 # forecast horizon in days (days 0-33, where day 0 = reference_date)
 # NOTE: with met_driver_lag_days: 1, day 0 (the reference date) is driven by the
 # yesterday-initialized stage2 forecast, so it is a real 1-day-ahead driver rather
-# than the (unavailable) same-day one.
-lead_times: "11d"
+# than the (unavailable) same-day one. GEFS stage2 runs 35 days, so the 1-day lag
+# leaves 34 forecast days (driver lead days 1-34).
+lead_times: "35d" # driver horizon to pull: met_driver_lag_days + f_horizon days
 
 # Forecast uncertainty settings (Goal 3: Forecast Driver Uncertainty)
 include_forecast_uncertainty: False  # NOTE: use False for lstm noAR/AR; use True for encoder_decoder

@@ -1,3 +1,5 @@
+import os
+
 import yaml
 from datetime import datetime
 
@@ -5,6 +7,10 @@ from datetime import datetime
 CSDMS_CHLA_LOC   = 'channel_water_surface_water__location_of_ald_of_chlorophyll'
 CSDMS_CHLA_SCALE = 'channel_water_surface_water__scale_of_ald_of_chlorophyll'
 CSDMS_CHLA_ASYM  = 'channel_water_surface_water__asymmetry_of_ald_of_chlorophyll'
+
+# Decoder feature: last observed chla available at forecast time (the final encoder
+# day's chla_lagged), repeated over every forecast day (config decoder_last_chla).
+LAST_CHLA_VAR = 'chla_last_obs'
 
 
 def generate_model_id(config, date_str=None):
@@ -147,3 +153,31 @@ def load_config(yaml_file: str):
         config = yaml.safe_load(stream)
     return config
 
+
+
+def training_data_dir(config):
+    """Directory holding the training ``{model_id}.npz`` files.
+
+    ``config['training_data_dir']`` when set, otherwise ``<data_in_dir>/training_data``.
+    """
+    return config.get("training_data_dir") or os.path.join(config.get("data_in_dir", "in/"), "training_data")
+
+
+def check_no_overwrite(paths, config):
+    """Refuse to overwrite existing training outputs.
+
+    Raises FileExistsError if any of ``paths`` already exists, unless
+    ``config['overwrite_training_outputs']`` is True. Protects previously trained
+    models (weights, scalers, logs) from being replaced by a new run that resolves
+    to the same model_id or output directory.
+    """
+    if config.get("overwrite_training_outputs", False):
+        return
+    existing = [str(p) for p in paths if os.path.exists(p)]
+    if existing:
+        raise FileExistsError(
+            "Refusing to overwrite existing training output(s): "
+            + ", ".join(existing)
+            + ". Change model_date/model_id or train_dir/training_data_dir, or set "
+            "overwrite_training_outputs: True to replace them."
+        )

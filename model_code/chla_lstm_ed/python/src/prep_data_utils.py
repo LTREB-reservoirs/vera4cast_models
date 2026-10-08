@@ -523,7 +523,8 @@ def create_encoder_decoder_samples(
     end_date=None,
     include_obs_uncertainty=True,
     filter_nan_targets=True,
-    log_transform_target=False
+    log_transform_target=False,
+    met_lag_days=0
 ):
     """
     Create aligned encoder-decoder sample pairs for training.
@@ -585,6 +586,10 @@ def create_encoder_decoder_samples(
         - Equalizing relative errors across concentration range
         - Preventing underprediction of high values
         - Better handling of skewed distributions
+    met_lag_days : int
+        Age of the decoder met driver: each sample uses the GEFS forecast
+        initialized this many days before its init time, matching the real-time
+        lag applied by ``build_forecast_data.py`` (default 0).
 
     Returns
     -------
@@ -682,6 +687,14 @@ def create_encoder_decoder_samples(
         # Stack for multiple targets (currently just chla)
         target_obs_pi90 = np.stack([obs_pi90], axis=-1)  # Shape: (time, site, n_targets)
 
+    # Last-observed-chla decoder feature (helper_utils.LAST_CHLA_VAR): the encoder's
+    # final chla_lagged value, i.e. the latest observation available at init time.
+    last_chla_var = 'chla_last_obs'
+    if last_chla_var in decoder_vars:
+        if 'chla_lagged' not in encoder_vars:
+            raise ValueError(f"'{last_chla_var}' needs 'chla_lagged' in encoder_vars.")
+        enc_lag_idx = encoder_vars.index('chla_lagged')
+
     # Identify met vars, PI90 vars, and static vars in decoder
     # PI90 vars are those ending with '_pi90'
     pi90_vars = [v for v in decoder_vars if v.endswith('_pi90')]
@@ -708,7 +721,8 @@ def create_encoder_decoder_samples(
             met_vars=base_met_vars,
             gefs_operational_xr=gefs_operational_xr,
             climatology_xr=climatology_xr,
-            decoder_seq_len=decoder_seq_len
+            decoder_seq_len=decoder_seq_len,
+            met_lag_days=met_lag_days
         )
 
         # Build blended met forecast data
@@ -718,7 +732,8 @@ def create_encoder_decoder_samples(
             met_vars=met_vars,  # met_vars now correctly contains only meteorological variables
             gefs_operational_xr=gefs_operational_xr,
             climatology_xr=climatology_xr,
-            decoder_seq_len=decoder_seq_len
+            decoder_seq_len=decoder_seq_len,
+            met_lag_days=met_lag_days
         )
 
         # Get static features (same for all lead times)
@@ -752,6 +767,9 @@ def create_encoder_decoder_samples(
                         lagged_day0 = data_xr[var].values[t_idx, site_idx] if var in data_xr else 0.0
                         x_decoder[sample_idx, 0, feat_idx] = lagged_day0 if not np.isnan(lagged_day0) else 0.0
                         x_decoder[sample_idx, 1:, feat_idx] = 0.0  # Placeholder for autoregressive rollout
+                    elif var == last_chla_var:
+                        # NaN (long observation gap) is filled with the scaled mean later
+                        x_decoder[sample_idx, :, feat_idx] = encoder_data[t_idx - 1, site_idx, enc_lag_idx]
                     elif var in pi90_data:
                         # PI90 from blended data (already per-sample, per-site, per-lead)
                         x_decoder[sample_idx, :, feat_idx] = pi90_data[var][sample_t_idx, site_idx, :]
@@ -837,6 +855,9 @@ def create_encoder_decoder_samples(
                             lagged_day0 = 0.0
                         x_decoder[sample_idx, 0, feat_idx] = lagged_day0 if not np.isnan(lagged_day0) else 0.0
                         x_decoder[sample_idx, 1:, feat_idx] = 0.0  # Placeholder for autoregressive
+                if last_chla_var in decoder_vars:
+                    x_decoder[sample_idx, :, decoder_vars.index(last_chla_var)] = \
+                        encoder_data[encoder_end - 1, site_idx, enc_lag_idx]
 
                 # Target: actual observations for decoder period
                 y[sample_idx] = target_data[decoder_start:decoder_end, site_idx, :]
@@ -887,6 +908,42 @@ def create_encoder_decoder_samples(
     if include_obs_uncertainty:
         result['y_obs_pi90'] = y_obs_pi90
 
+    return result
+
+
+def create_encoder_decoder_samples_for_periods(start_dates, end_dates, decoder_seq_len, **kwargs):
+    """Build encoder-decoder samples for one or more [start, end] periods and concatenate.
+
+    ``start_dates``/``end_dates`` are a date or parallel lists of dates (e.g. the two
+    training periods either side of the validation/test years). Init dates in each
+    period stop ``decoder_seq_len - 1`` days before its end, so every target day lies
+    inside the period -- no training window's targets reach into a validation/test
+    year, and vice versa. Encoder look-back may reach before ``start`` (inputs only).
+    Other arguments are passed to ``create_encoder_decoder_samples``.
+    """
+    starts = start_dates if isinstance(start_dates, (list, tuple)) else [start_dates]
+    ends = end_dates if isinstance(end_dates, (list, tuple)) else [end_dates]
+    if len(starts) != len(ends):
+        raise ValueError(f"Got {len(starts)} start date(s) but {len(ends)} end date(s).")
+
+    parts = []
+    for start, end in zip(starts, ends):
+        last_init = pd.Timestamp(end) - pd.Timedelta(days=decoder_seq_len - 1)
+        if last_init < pd.Timestamp(start):
+            print(f"  WARNING: period {start} .. {end} is shorter than the {decoder_seq_len}-day "
+                  "decoder; skipping it.")
+            continue
+        print(f"  Period {start} .. {end}: init dates {start} .. {last_init.date()}")
+        parts.append(create_encoder_decoder_samples(
+            start_date=start, end_date=str(last_init.date()),
+            decoder_seq_len=decoder_seq_len, **kwargs))
+    if not parts:
+        raise ValueError(f"No usable periods in {starts} .. {ends}.")
+
+    result = dict(parts[0])
+    for key in ('x_encoder', 'x_decoder', 'y', 'y_obs_pi90', 'init_dates', 'site_ids'):
+        if key in result:
+            result[key] = np.concatenate([part[key] for part in parts], axis=0)
     return result
 
 
@@ -1193,13 +1250,42 @@ def prepare_decoder_with_forecast(
     )
 
 
+def _operational_window(da, init_time, decoder_seq_len, met_lag_days=0):
+    """``(decoder_seq_len, n_sites)`` driver forecast values for one sample, or None.
+
+    The driver is the forecast initialized ``met_lag_days`` before ``init_time``
+    (in operation the current day's forecast isn't published yet), sliced from
+    lead day ``met_lag_days`` so its first value lands on ``init_time`` -- the same
+    alignment ``build_forecast_data.py`` uses at inference. The init date must
+    match exactly; when it is missing or entirely NaN, None is returned so the
+    caller falls back to climatology rather than borrowing a neighbouring date's
+    forecast.
+    """
+    op_init = np.datetime64(init_time, 'D') - np.timedelta64(met_lag_days, 'D')
+    try:
+        sel = da.sel(time=op_init)
+    except KeyError:
+        return None
+    if 'ensemble_member' in sel.dims:
+        sel = sel.median(dim='ensemble_member')
+    values = sel.transpose('lead_time', 'site_id').values[met_lag_days:met_lag_days + decoder_seq_len]
+    if values.shape[0] == 0 or np.isnan(values).all():
+        return None
+    if values.shape[0] < decoder_seq_len:
+        # Pad with the last value if the driver doesn't cover the full horizon
+        pad = np.repeat(values[-1:], decoder_seq_len - values.shape[0], axis=0)
+        values = np.concatenate([values, pad])
+    return values
+
+
 def build_decoder_pi90_blended(
     times,
     sites,
     met_vars,
     gefs_operational_xr,
     climatology_xr,
-    decoder_seq_len=10
+    decoder_seq_len=10,
+    met_lag_days=0
 ):
     """
     Build decoder PI90 arrays by blending GEFS ensemble PI90 (where available)
@@ -1228,6 +1314,9 @@ def build_decoder_pi90_blended(
         Day-of-year climatology with PI90 (dayofyear, site_id)
     decoder_seq_len : int
         Number of forecast days (default 10)
+    met_lag_days : int
+        Driver age: each sample uses the forecast initialized this many days
+        before its init time (see ``_operational_window``). Default 0.
 
     Returns
     -------
@@ -1237,15 +1326,6 @@ def build_decoder_pi90_blended(
     """
     n_times = len(times)
     n_sites = len(sites)
-
-    # Determine which times have operational GEFS available
-    if gefs_operational_xr is not None and 'time' in gefs_operational_xr.dims:
-        op_times = gefs_operational_xr['time'].values
-        op_time_min = op_times.min()
-        op_time_max = op_times.max()
-    else:
-        op_time_min = np.datetime64('2100-01-01')  # Far future = no operational data
-        op_time_max = np.datetime64('2100-01-01')
 
     pi90_data = {}
 
@@ -1261,42 +1341,15 @@ def build_decoder_pi90_blended(
             clim_pi90 = np.full(366, 20.0, dtype=np.float32)
 
         for t_idx, init_time in enumerate(times):
-            # Check if this time has operational GEFS data
-            has_operational = (init_time >= op_time_min) and (init_time <= op_time_max)
+            gefs_pi90_values = None
+            if gefs_operational_xr is not None and pi90_var in gefs_operational_xr:
+                gefs_pi90_values = _operational_window(
+                    gefs_operational_xr[pi90_var], init_time, decoder_seq_len, met_lag_days
+                )
 
-            if has_operational and gefs_operational_xr is not None:
-                try:
-                    # Try to get GEFS ensemble PI90 for this init time
-                    gefs_pi90 = gefs_operational_xr[pi90_var].sel(
-                        time=init_time, method='nearest'
-                    )
-                    # Get values for all sites and lead times
-                    # Shape should be (lead_time, site_id) after selection
-                    gefs_pi90_values = gefs_pi90.values
-
-                    # Handle dimension ordering - we want (site_id, lead_time)
-                    if gefs_pi90_values.ndim == 2:
-                        # Transpose if needed to get (lead_time, site_id)
-                        if gefs_pi90.dims[0] == 'site_id':
-                            gefs_pi90_values = gefs_pi90_values.T
-
-                        # Truncate or pad to decoder_seq_len
-                        n_lead = gefs_pi90_values.shape[0]
-                        if n_lead >= decoder_seq_len:
-                            pi90_array[t_idx, :, :] = gefs_pi90_values[:decoder_seq_len, :].T
-                        else:
-                            # Pad with last value if GEFS doesn't cover full horizon
-                            pi90_array[t_idx, :, :n_lead] = gefs_pi90_values.T
-                            pi90_array[t_idx, :, n_lead:] = gefs_pi90_values[-1, :, np.newaxis]
-                    else:
-                        # Unexpected shape, fall back to climatology
-                        raise ValueError(f"Unexpected PI90 shape: {gefs_pi90_values.shape}")
-
-                except (KeyError, ValueError) as e:
-                    # Fall back to climatology if GEFS selection fails
-                    has_operational = False
-
-            if not has_operational:
+            if gefs_pi90_values is not None:
+                pi90_array[t_idx, :, :] = gefs_pi90_values.T
+            else:
                 # Use climatology PI90 for each day in the decoder sequence
                 # lead_day=0 corresponds to init_time (first prediction day)
                 for lead_day in range(decoder_seq_len):
@@ -1319,7 +1372,8 @@ def build_decoder_met_blended(
     met_vars,
     gefs_operational_xr,
     climatology_xr,
-    decoder_seq_len=10
+    decoder_seq_len=10,
+    met_lag_days=0
 ):
     """
     Build decoder meteorological forecast arrays by blending GEFS ensemble median
@@ -1339,6 +1393,9 @@ def build_decoder_met_blended(
         Day-of-year climatology means
     decoder_seq_len : int
         Number of forecast days (default 10)
+    met_lag_days : int
+        Driver age: each sample uses the forecast initialized this many days
+        before its init time (see ``_operational_window``). Default 0.
 
     Returns
     -------
@@ -1347,15 +1404,6 @@ def build_decoder_met_blended(
     """
     n_times = len(times)
     n_sites = len(sites)
-
-    # Determine which times have operational GEFS available
-    if gefs_operational_xr is not None and 'time' in gefs_operational_xr.dims:
-        op_times = gefs_operational_xr['time'].values
-        op_time_min = op_times.min()
-        op_time_max = op_times.max()
-    else:
-        op_time_min = np.datetime64('2100-01-01')
-        op_time_max = np.datetime64('2100-01-01')
 
     met_data = {}
 
@@ -1369,40 +1417,16 @@ def build_decoder_met_blended(
             clim_values = np.zeros(366, dtype=np.float32)
 
         for t_idx, init_time in enumerate(times):
-            has_operational = (init_time >= op_time_min) and (init_time <= op_time_max)
+            # Ensemble median (collapsed in _operational_window), as at inference
+            gefs_values = None
+            if gefs_operational_xr is not None and var in gefs_operational_xr:
+                gefs_values = _operational_window(
+                    gefs_operational_xr[var], init_time, decoder_seq_len, met_lag_days
+                )
 
-            if has_operational and gefs_operational_xr is not None:
-                try:
-                    # Get GEFS forecast for this init time
-                    # First collapse ensemble to median if still present
-                    if 'ensemble_member' in gefs_operational_xr.dims:
-                        gefs_var = gefs_operational_xr[var].sel(
-                            time=init_time, method='nearest'
-                        ).quantile(0.5, dim='ensemble_member')
-                    else:
-                        gefs_var = gefs_operational_xr[var].sel(
-                            time=init_time, method='nearest'
-                        )
-
-                    gefs_values = gefs_var.values
-
-                    if gefs_values.ndim == 2:
-                        if gefs_var.dims[0] == 'site_id':
-                            gefs_values = gefs_values.T
-
-                        n_lead = gefs_values.shape[0]
-                        if n_lead >= decoder_seq_len:
-                            met_array[t_idx, :, :] = gefs_values[:decoder_seq_len, :].T
-                        else:
-                            met_array[t_idx, :, :n_lead] = gefs_values.T
-                            met_array[t_idx, :, n_lead:] = gefs_values[-1, :, np.newaxis]
-                    else:
-                        raise ValueError(f"Unexpected shape: {gefs_values.shape}")
-
-                except (KeyError, ValueError):
-                    has_operational = False
-
-            if not has_operational:
+            if gefs_values is not None:
+                met_array[t_idx, :, :] = gefs_values.T
+            else:
                 # lead_day=0 corresponds to init_time (first prediction day)
                 for lead_day in range(decoder_seq_len):
                     forecast_date = init_time + np.timedelta64(lead_day, 'D')

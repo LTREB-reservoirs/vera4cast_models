@@ -1,6 +1,7 @@
 import os
 import torch
-from src.helper_utils import load_config, get_model_id, chla_lag_days, chla_lag_source
+from src.helper_utils import (load_config, get_model_id, chla_lag_days, chla_lag_source, met_driver_lag_days,
+                              training_data_dir, check_no_overwrite, LAST_CHLA_VAR)
 from src.pull_usgsrc4cast_data import pull_target_data
 from src.pull_predicted_chl import pull_predicted_chl
 from src.pull_vera4cast_chla_data import build_chla_lag, chla_lag_url
@@ -623,7 +624,8 @@ def data_prep(config_file, root_dir=None):
                                 engine ='netcdf4', mode = 'w')
 
     model_id = get_model_id(config)
-    output_file = os.path.join('in/training_data', f'{model_id}.npz')
+    output_file = os.path.join(training_data_dir(config), f'{model_id}.npz')
+    check_no_overwrite([output_file], config)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     print(f"Saving training data to {output_file}")
     np.savez_compressed(output_file, **all_data)
@@ -649,6 +651,26 @@ def aggregate_operational_gefs(
     )
 
     return out_ds
+
+def load_operational_gefs_daily(path, variables, site_ids=None):
+    """Load an hourly operational GEFS file and aggregate it to daily lead times.
+
+    The stage2 training file is large (init_time x hourly lead_time x 31 members x
+    sites, several GB as float64), so instead of loading it whole this opens it
+    lazily, keeps only ``site_ids`` (when given), and reads one variable at a time
+    as float32 before aggregating with ``aggregate_operational_gefs``. The result
+    matches aggregating the fully loaded file, apart from float32 rounding.
+    """
+    ds = xr.open_dataset(path, engine="netcdf4", decode_timedelta=True)
+    if site_ids:
+        keep = [s for s in ds.site_id.values if str(s) in {str(x) for x in site_ids}]
+        if not keep:
+            raise ValueError(f"None of site_ids {site_ids} are in {path} (has {list(ds.site_id.values)})")
+        ds = ds.sel(site_id=keep)
+    loaded = xr.Dataset({var: ds[var].load().astype("float32") for var in variables})
+    ds.close()
+    return aggregate_operational_gefs(ds=loaded, out_vars=variables)
+
 
 def aggregate_analysis_gefs(
         ds,
@@ -806,14 +828,12 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
     gefs_xr = aggregate_analysis_gefs(ds=gefs_xr, out_vars=config['x_vars'])
 
     print("Loading GEFS operational forecasts...")
-    gefs_operational_xr = xr.load_dataset(
-        filename_or_obj=config['gefs_operational_local_file'],
-        engine="netcdf4",
-        chunks=None,
-        decode_timedelta=True
-    )
     gefs_operational_xr = (
-        aggregate_operational_gefs(ds=gefs_operational_xr, out_vars=config['x_vars'])
+        load_operational_gefs_daily(
+            path=config['gefs_operational_local_file'],
+            variables=config['x_vars'],
+            site_ids=config.get('site_ids_to_include'),
+        )
         .rename({"init_time": "time"})
     )
 
@@ -950,10 +970,21 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
     if lag_source and config.get('decoder_autoregressive', False):
         decoder_vars = decoder_vars + ['chla_lagged', 'chla_uncertainty_lagged']
 
+    # Last observed chla (available at forecast time) on every decoder day, so the
+    # decoder starts from the current state rather than having to carry it over
+    # from the encoder.
+    if config.get('decoder_last_chla', False):
+        if not lag_source:
+            raise ValueError("decoder_last_chla needs chla history in the encoder (chla_lag or lag_target).")
+        decoder_vars = decoder_vars + [LAST_CHLA_VAR]
+
     target_vars = config['y_vars']
 
     encoder_seq_len = config.get('encoder_seq_len', 365)
     decoder_seq_len = config.get('decoder_seq_len', 10)
+    # Same driver age as operation (build_forecast_data.py): a sample initialized on
+    # R is driven by the GEFS forecast issued on R - met_lag.
+    met_lag = met_driver_lag_days(config)
 
     print(f"Creating encoder-decoder samples...")
     print(f"  Encoder: {encoder_seq_len} days, {len(encoder_vars)} features")
@@ -969,7 +1000,9 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
     # Create training samples
     # Pass operational GEFS with PI90 for blending with climatology
     print("Creating training samples...")
-    train_data = create_encoder_decoder_samples(
+    train_data = create_encoder_decoder_samples_for_periods(
+        start_dates=config['start_date_train'],
+        end_dates=config['end_date_train'],
         data_xr=data_xr,
         encoder_vars=encoder_vars,
         decoder_vars=decoder_vars,
@@ -981,14 +1014,15 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
         spatial_idx_name=config['spatial_idx_name'],
         time_idx_name=config['time_idx_name'],
         offset=1,
-        start_date=config['start_date_train'][0] if isinstance(config['start_date_train'], list) else config['start_date_train'],
-        end_date=config['end_date_train'][-1] if isinstance(config['end_date_train'], list) else config['end_date_train'],
-        log_transform_target=log_transform_target
+        log_transform_target=log_transform_target,
+        met_lag_days=met_lag
     )
 
     # Create validation samples
     print("Creating validation samples...")
-    val_data = create_encoder_decoder_samples(
+    val_data = create_encoder_decoder_samples_for_periods(
+        start_dates=config['start_date_val'],
+        end_dates=config['end_date_val'],
         data_xr=data_xr,
         encoder_vars=encoder_vars,
         decoder_vars=decoder_vars,
@@ -1000,9 +1034,8 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
         spatial_idx_name=config['spatial_idx_name'],
         time_idx_name=config['time_idx_name'],
         offset=1,
-        start_date=config['start_date_val'],
-        end_date=config['end_date_val'],
-        log_transform_target=log_transform_target
+        log_transform_target=log_transform_target,
+        met_lag_days=met_lag
     )
 
     # Create test samples (if test dates are configured)
@@ -1010,7 +1043,9 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
     test_data = None
     if config.get('start_date_test') and config.get('end_date_test'):
         print("Creating test samples...")
-        test_data = create_encoder_decoder_samples(
+        test_data = create_encoder_decoder_samples_for_periods(
+            start_dates=config['start_date_test'],
+            end_dates=config['end_date_test'],
             data_xr=data_xr,
             encoder_vars=encoder_vars,
             decoder_vars=decoder_vars,
@@ -1022,10 +1057,9 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
             spatial_idx_name=config['spatial_idx_name'],
             time_idx_name=config['time_idx_name'],
             offset=1,
-            start_date=config['start_date_test'],
-            end_date=config['end_date_test'],
             filter_nan_targets=False,  # Keep all samples for test/prediction
-            log_transform_target=log_transform_target
+            log_transform_target=log_transform_target,
+            met_lag_days=met_lag
         )
 
     # Scale the data
@@ -1116,7 +1150,8 @@ def data_prep_encoder_decoder(config_file, root_dir=None):
 
     # Save to file
     model_id = get_model_id(config)
-    output_file = os.path.join('in/training_data', f'{model_id}.npz')
+    output_file = os.path.join(training_data_dir(config), f'{model_id}.npz')
+    check_no_overwrite([output_file], config)
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     print(f"Saving encoder-decoder training data to {output_file}")
     np.savez_compressed(output_file, **all_data)

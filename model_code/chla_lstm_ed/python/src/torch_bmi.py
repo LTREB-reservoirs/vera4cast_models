@@ -16,7 +16,8 @@ from src.training_utils import *
 from src.training_utils import train_torch_encoder_decoder
 from src.sampling_utils import *
 from src.predict_utils import *
-from src.helper_utils import get_model_id, CSDMS_CHLA_LOC, CSDMS_CHLA_SCALE, CSDMS_CHLA_ASYM
+from src.helper_utils import (get_model_id, training_data_dir, check_no_overwrite, LAST_CHLA_VAR,
+                              CSDMS_CHLA_LOC, CSDMS_CHLA_SCALE, CSDMS_CHLA_ASYM)
 
 USE_PATH = True
 
@@ -376,12 +377,14 @@ class bmi_lstm(Bmi):
         print(f"  Head: {self.head}")
 
     def _set_reference_time(self):
-        """Anchor ``self.t`` at the forecast reference date for encoder-decoder inference.
+        """Set the forecast reference date for encoder-decoder inference.
 
-        The encoder-decoder path indexes ``forecast_data.time`` through ``self.t``
-        (see ``get_current_date``), so during inference it must point at the
-        reference date rather than the start of the record. Falls back to the last
-        time index when the file carries no ``reference_datetime``.
+        The reference date R comes from the file's ``reference_datetime``; it is
+        the first forecast day, not part of the encoder window (training encodes
+        the ``encoder_seq_len`` days *before* R -- see
+        ``create_encoder_decoder_samples``), so it need not be on ``time``.
+        Falls back to the last time index when the file carries no
+        ``reference_datetime``.
         """
         time_values = self.forecast_data.time.values
         ref = None
@@ -390,15 +393,12 @@ class bmi_lstm(Bmi):
         if ref is None:
             ref = self.forecast_data.attrs.get('reference_datetime')
 
+        self.t = len(time_values) - 1
         if ref is not None:
-            ref = np.datetime64(pd.Timestamp(str(ref)))
-            idx = int(np.argmin(np.abs(time_values - ref)))
+            self.reference_date = pd.Timestamp(str(ref)).normalize().to_datetime64()
         else:
-            idx = len(time_values) - 1
-
-        self.t = idx
-        print(f"Anchored forecast reference time to index {idx}: "
-              f"{self.forecast_data.time.isel(time=idx).values}")
+            self.reference_date = time_values[self.t]
+        print(f"Forecast reference date: {self.reference_date}")
 
     def _update_encoder_decoder(self):
         """Update encoder-decoder model for a single time step.
@@ -795,6 +795,10 @@ class bmi_lstm(Bmi):
         """Transpose to ``dims``, ignoring dims the array doesn't have."""
         return da.transpose(*[d for d in dims if d in da.dims])
 
+    # Features allowed to be partially missing (filled with the training mean,
+    # matching how training handled them); all others must be complete.
+    _GAPPY_FEATURES = ('chla_lagged', 'chla_uncertainty_lagged', LAST_CHLA_VAR)
+
     def _handle_missing_features(self, x, names, means, stage):
         """Substitute the training mean for whole features the driver source lacks.
 
@@ -804,7 +808,7 @@ class bmi_lstm(Bmi):
         neutral value. A *partially* NaN column is a real data problem and still
         raises, so silent degradation stays impossible.
         """
-        imputed, broken = [], []
+        imputed, broken, gap_filled = [], [], []
         for i, name in enumerate(names):
             col = x[:, :, i]
             n_nan = int(np.isnan(col).sum())
@@ -813,6 +817,11 @@ class bmi_lstm(Bmi):
             if n_nan == col.size:
                 x[:, :, i] = means[i]
                 imputed.append(str(name))
+            elif str(name) in self._GAPPY_FEATURES:
+                # Observed-chla history can have gaps longer than the causal fill;
+                # training filled those with the training mean, so do the same.
+                x[:, :, i] = np.where(np.isnan(col), means[i], col)
+                gap_filled.append(f"{name} ({n_nan} day(s))")
             else:
                 broken.append(str(name))
 
@@ -827,14 +836,17 @@ class bmi_lstm(Bmi):
                 f"WARNING: {stage} feature(s) not available from the driver source; "
                 f"filled with their training mean: {imputed}"
             )
+        if gap_filled:
+            print(f"NOTE: {stage} gaps filled with the training mean: {gap_filled}")
         return x
 
     def _build_encoder_input(self):
         """
         Build encoder input tensor from the observed lookback window.
 
-        Selects exactly ``encoder_seq_len`` days ending at the reference date, so
-        the window matches what the model was trained on.
+        Selects exactly ``encoder_seq_len`` days ending the day *before* the
+        reference date, matching the training samples (encoder = days
+        R-encoder_seq_len .. R-1, decoder/targets start on R).
 
         Returns:
             torch.Tensor: Encoder input tensor of shape (n_sites, encoder_seq_len, n_encoder_feat)
@@ -851,10 +863,12 @@ class bmi_lstm(Bmi):
             return torch.from_numpy(x_encoder).float()
 
         current_date = self.get_current_date()
-        # Inclusive slice of exactly encoder_seq_len days ending at the reference date.
-        encoder_start_date = current_date - np.timedelta64(self.encoder_seq_len - 1, 'D')
+        # Inclusive slice of exactly encoder_seq_len days ending the day before the
+        # reference date.
+        encoder_end_date = current_date - np.timedelta64(1, 'D')
+        encoder_start_date = encoder_end_date - np.timedelta64(self.encoder_seq_len - 1, 'D')
         encoder_data = self.forecast_data.sel(
-            time=slice(encoder_start_date, current_date)
+            time=slice(encoder_start_date, encoder_end_date)
         )
 
         n_sites = len(encoder_data.site_id)
@@ -864,7 +878,7 @@ class bmi_lstm(Bmi):
         if n_times != self.encoder_seq_len:
             raise ValueError(
                 f"Encoder window has {n_times} day(s) but encoder_seq_len is "
-                f"{self.encoder_seq_len} ({encoder_start_date} .. {current_date}). "
+                f"{self.encoder_seq_len} ({encoder_start_date} .. {encoder_end_date}). "
                 "Check that forecast_data covers the full lookback window."
             )
 
@@ -961,6 +975,17 @@ class bmi_lstm(Bmi):
                 x_decoder[:, :, i] = np.where(np.isnan(col), fill, col)
                 continue
 
+            if name == LAST_CHLA_VAR:
+                # Latest observed chla at forecast time = chla_lagged on the last
+                # encoder day (the day before the reference date), on every lead day.
+                last_day = self.get_current_date() - np.timedelta64(1, 'D')
+                if 'chla_lagged' in self.forecast_data:
+                    vals = self._reorder(self.forecast_data['chla_lagged'].sel(time=last_day), ('site_id',)).values
+                else:
+                    vals = np.full(n_sites, np.nan)
+                x_decoder[:, :, i] = np.repeat(np.asarray(vals, dtype=np.float32).reshape(n_sites, 1), lead_time, axis=1)
+                continue
+
             col = self._lead_time_series(f"{name}_forecast", lead_time, n_sites)
             if col is None:
                 # Static / non-forecast feature: reuse the site-level values.
@@ -980,22 +1005,43 @@ class bmi_lstm(Bmi):
         if hasattr(self, 'decoder_mean') and hasattr(self, 'decoder_std'):
             x_decoder = (x_decoder - self.decoder_mean) / (self.decoder_std + 1e-10)
 
-        x_decoder = self._hold_untrained_spread(x_decoder, decoder_vars)
+        x_decoder = self._hold_untrained_inputs(x_decoder, decoder_vars)
 
         return torch.from_numpy(x_decoder).float()
 
-    def _hold_untrained_spread(self, x_decoder, decoder_vars):
-        """Pin PI90 spread features that never varied in training to their training value.
+    def _hold_untrained_inputs(self, x_decoder, decoder_vars):
+        """Pin decoder inputs that never varied in training to their training value.
 
-        A model trained on ``flare_s3_stage3`` decoder data saw zero forecast spread
-        throughout, so the weights on its ``*_pi90`` inputs were never trained. Feeding
-        it real stage2 spread would push those inputs through untrained weights, so
-        they are held at the (scaled) training constant instead. Once the model is
-        retrained on stage2 data the spread varies in training and this is a no-op.
+        A feature that was constant in the training data (e.g. ``*_pi90`` spread for a
+        model trained on ``flare_s3_stage3`` drivers, or cloud cover when the driver
+        source had none) has untrained weights, so feeding it real values at inference
+        would push them through those weights. Such inputs are held at the (scaled)
+        training constant instead. Static site features are skipped -- they are
+        constant by design and identical at inference. Once the model is retrained on
+        data where the feature varies, this is a no-op for it.
         """
         x_trn = getattr(self, 'x_decoder_trn', None)
         if x_trn is None:
             return x_decoder
+
+        static = set(self.cfg_bmi.get('x_vars_static') or [])
+        held = []
+        for i, var in enumerate(decoder_vars):
+            name = str(var)
+            if name in static:
+                continue
+            col_trn = x_trn[..., i]
+            lo, hi = np.nanmin(col_trn), np.nanmax(col_trn)
+            if np.isclose(lo, hi):
+                x_decoder[:, :, i] = lo
+                held.append(name)
+
+        if held:
+            print(
+                "WARNING: these decoder inputs were constant in training, so they are held "
+                f"at their training value (retrain with data where they vary to use them): {held}"
+            )
+        return x_decoder
 
         held = []
         for i, var in enumerate(decoder_vars):
@@ -1088,6 +1134,13 @@ class bmi_lstm(Bmi):
             - Dropout behavior is managed based on the `self.mc_dropout` flag to ensure correct training
             and evaluation modes.
         """
+        # Never replace a previously trained model's weights, log or saved config.
+        check_no_overwrite(
+            [self.weights_file, self.log_file,
+             os.path.join(self.train_dir, f'{self.model_id}_config.yml')],
+            self.cfg_bmi,
+        )
+
         # Dispatch to encoder-decoder training if model_type is encoder_decoder
         if self.model_type == 'encoder_decoder':
             self.train_model_encoder_decoder()
@@ -1663,7 +1716,7 @@ class bmi_lstm(Bmi):
         print(f"Using model_id: {self.model_id}")
         # Store the resolved model_id back in config for saving/logging
         self.cfg_bmi['model_id'] = self.model_id
-        data_file_rel = os.path.join(self.cfg_bmi.get('data_in_dir', 'in/'), 'training_data', f'{self.model_id}.npz')
+        data_file_rel = os.path.join(training_data_dir(self.cfg_bmi), f'{self.model_id}.npz')
         self.data_file = os.path.join(self.root_dir, data_file_rel) if self.root_dir is not None else data_file_rel
         self.weights_dir = os.path.join(self.train_dir, f'{self.model_id}_wgts')
         self.weights_file = os.path.join(self.weights_dir, 'weights.pth')
@@ -2799,6 +2852,10 @@ class bmi_lstm(Bmi):
         return self.t
 
     def get_current_date(self):
+        # Encoder-decoder inference: the reference date (first forecast day), which
+        # follows the last encoder day on forecast_data.time.
+        if getattr(self, 'reference_date', None) is not None:
+            return self.reference_date
         return self.forecast_data.time.isel(time = int(self.t)).values
 
     def get_end_time(self):
