@@ -30,7 +30,8 @@ staged file.
 Output layout (single file, raw/unscaled units -- the BMI scales at inference):
 
     coords:
-      time              : daily, [R-(enc_len-1) .. R]   # encoder lookback window
+      time              : daily, [R-enc_len .. R-1]     # encoder lookback window (the
+                          enc_len days before R, as in training)
       lead_time         : timedelta64, 0d .. (dec_len-1)d  # decoder horizon (R + l);
                           driven by the stage2 driver init at R - met_driver_lag_days
     scalar coord / attrs:
@@ -45,17 +46,16 @@ Notes on variables:
     encoder/decoder name collision on ``temperature_2m`` etc.  ``_pi90`` keeps
     its decoder name unchanged.
   * FLARE's stage2/stage3 archives have no ``total_cloud_cover_atmosphere``
-    equivalent; that variable (and its PI90) is written as NaN, matching how the
-    model was trained.
+    equivalent. With ``cloud_cover_source: "dynamical"`` it is filled from the
+    dynamical.org GEFS analysis (encoder) and 35-day forecast (decoder); otherwise
+    it (and its PI90) is written as NaN.
 
-Companion changes required in ``src/torch_bmi.py`` (not made here):
-  * ``_build_encoder_input``: slice the lookback as the last ``encoder_seq_len``
-    rows ending at ``reference_datetime`` (the current ``current_date - 90d``
-    slice yields 91 rows, one more than the model expects).
-  * ``_build_decoder_input``: read ``f"{var}_forecast"`` over ``lead_time``
-    (0 .. decoder_seq_len-1) instead of selecting future ``time`` values.
-  * Set the forecast anchor: ``self.t`` must point at ``reference_datetime``
-    (i.e. the last ``time`` index) so ``get_current_date()`` returns R.
+How ``src/torch_bmi.py`` reads this file:
+  * ``_build_encoder_input``: the ``encoder_seq_len`` days ending the day before
+    ``reference_datetime`` (all of ``time``).
+  * ``_build_decoder_input``: ``f"{var}_forecast"`` / ``f"{var}_pi90"`` over
+    ``lead_time`` (0 .. decoder_seq_len-1).
+  * ``_set_reference_time``: ``get_current_date()`` returns ``reference_datetime``.
 
 Usage:
     python build_forecast_data.py model_config.yml 2026-10-06
@@ -116,7 +116,9 @@ def _pull_analysis(config: dict, site_metadata: xr.Dataset, start, end, variable
     source = config.get("met_data_source", "dynamical")
     if source in _FLARE_SOURCES:
         return pull_gefs_analysis_flare(
-            start_time=start, end_time=end, site_metadata=site_metadata, variables=variables
+            start_time=start, end_time=end, site_metadata=site_metadata, variables=variables,
+            cloud_cover_source=config.get("cloud_cover_source"),
+            email=config.get("email", "optional@email.com"),
         ).load()
     return pull_gefs_analysis(
         start_time=start,
@@ -205,19 +207,36 @@ def _build_encoder_hydro(config: dict, start, ref) -> xr.Dataset:
 
 
 def _build_encoder_history(config: dict, site_metadata: xr.Dataset, ref: np.datetime64, enc_len: int):
-    """Daily (time, site_id) history over the encoder lookback window."""
-    start = ref - np.timedelta64(enc_len - 1, "D")
+    """Daily (time, site_id) history over the encoder lookback window.
 
-    print(f"Pulling analysis met for encoder window {start} .. {ref}")
-    analysis = _pull_analysis(config, site_metadata, start, ref, config["x_vars"])
+    The window is the ``enc_len`` days *before* the reference date (R-enc_len ..
+    R-1), matching ``create_encoder_decoder_samples``, where the encoder ends the
+    day before the first forecast/target day.
+    """
+    end = ref - np.timedelta64(1, "D")
+    start = ref - np.timedelta64(enc_len, "D")
+
+    print(f"Pulling analysis met for encoder window {start} .. {end}")
+    # The pull is inclusive of the whole end day, so R-1 gets all 24 hours.
+    analysis = _pull_analysis(config, site_metadata, start, end, config["x_vars"])
     analysis = analysis.interpolate_na(dim="time", method="linear")
     analysis_daily = aggregate_analysis_gefs(ds=analysis, out_vars=config["x_vars"])
     # aggregate_* resamples to day-start labels; keep the requested inclusive window.
-    analysis_daily = analysis_daily.sel(time=slice(start, ref))
+    analysis_daily = analysis_daily.sel(time=slice(start, end))
+    cloud = "total_cloud_cover_atmosphere"
+    if config.get("cloud_cover_source") and cloud in analysis_daily:
+        # The dynamical.org analysis can trail real time by a few hours; carry the last
+        # value forward so a short gap at the end of the window doesn't leave a
+        # partially-NaN feature (an all-NaN one still falls back to the training mean).
+        n_gap = int(analysis_daily[cloud].isnull().sum())
+        analysis_daily[cloud] = analysis_daily[cloud].ffill("time", limit=3)
+        if n_gap and not bool(analysis_daily[cloud].isnull().all()):
+            print(f"NOTE: forward-filled {n_gap} missing daily {cloud} value(s) at the end "
+                  "of the encoder window.")
 
     hydro = None
     if config.get("hydro_vars"):
-        hydro = _build_encoder_hydro(config, start, ref)
+        hydro = _build_encoder_hydro(config, start, end)
 
     return analysis_daily, hydro
 
@@ -257,6 +276,8 @@ def _build_decoder_forecast(config: dict, site_metadata: xr.Dataset, ref: np.dat
         site_metadata=site_metadata,
         lead_times=lead_times,
         variables=config["x_vars"],
+        cloud_cover_source=config.get("cloud_cover_source"),
+        email=config.get("email", "optional@email.com"),
     ).load()
     operational_daily = aggregate_operational_gefs(ds=operational, out_vars=config["x_vars"])
 

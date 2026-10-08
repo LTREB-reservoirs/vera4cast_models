@@ -17,9 +17,15 @@ Bucket layout (anonymous, S3-compatible, endpoint amnh1.osn.mghpcc.org):
 Coverage is limited to the specific lake sites FLARE operates forecasts for
 (e.g. "fcre", "bvre") -- site_ids with no match in the bucket are skipped with
 a warning rather than raising, since not every site in this codebase is covered.
+
+FLARE carries no cloud cover. With ``cloud_cover_source="dynamical"`` the pullers
+fill ``total_cloud_cover_atmosphere`` from dynamical.org's NOAA GEFS zarr stores
+instead (analysis for stage3, the 35-day forecast for stage2) -- a single variable
+at a single point, which reads quickly despite those stores' coarse chunking.
 """
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
@@ -47,6 +53,9 @@ FLARE_TO_DYNAMICAL_VARS = {
 # FLARE's stage2/stage3 archive has no equivalent for these -- filled with NaN if requested
 _UNSUPPORTED_VARS = {"total_cloud_cover_atmosphere"}
 
+CLOUD_VAR = "total_cloud_cover_atmosphere"
+DYNAMICAL_GEFS_URL = "https://data.dynamical.org/noaa/gefs/{store}/latest.zarr?email={email}"
+
 
 def _s3_filesystem(endpoint: str = FLARE_ENDPOINT) -> "pafs.S3FileSystem":
     return pafs.S3FileSystem(endpoint_override=endpoint, anonymous=True, scheme="https")
@@ -72,8 +81,12 @@ def _apply_var_mapping_and_units(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _finalize_met_vars(ds: xr.Dataset, variables: list) -> xr.Dataset:
-    """Add derived/missing variables so the output matches the requested variable set."""
+def _finalize_met_vars(ds: xr.Dataset, variables: list, filled_elsewhere=()) -> xr.Dataset:
+    """Add derived/missing variables so the output matches the requested variable set.
+
+    Variables in ``filled_elsewhere`` get a NaN placeholder without a warning; the
+    caller fills them from another source afterwards.
+    """
     if "temperature_2m" in ds:
         # FLARE only provides a single hourly temperature series (no separate daily
         # max/min variables); derive them here so the existing aggregate_*_gefs()
@@ -86,13 +99,116 @@ def _finalize_met_vars(ds: xr.Dataset, variables: list) -> xr.Dataset:
     template = ds[list(ds.data_vars)[0]]
     for var in variables:
         if var not in ds:
-            if var in _UNSUPPORTED_VARS:
+            if var in filled_elsewhere:
+                pass
+            elif var in _UNSUPPORTED_VARS:
                 print(f"WARNING: FLARE S3 met source has no '{var}' equivalent; filling with NaN.")
             else:
                 print(f"WARNING: requested variable '{var}' not found in FLARE met data; filling with NaN.")
             ds[var] = xr.full_like(template, np.nan)
 
     return ds[variables]
+
+
+def _dynamical_cloud_points(store: str, email: str, site_metadata: xr.Dataset) -> xr.DataArray:
+    """Lazy ``total_cloud_cover_atmosphere`` at each site's nearest GEFS grid point.
+
+    Returned with a ``site_id`` dimension (from ``site_metadata``), in percent.
+    """
+    ds = xr.open_zarr(DYNAMICAL_GEFS_URL.format(store=store, email=email),
+                      chunks=None, decode_timedelta=True)
+    da = ds[CLOUD_VAR].sel(
+        latitude=site_metadata.latitude, longitude=site_metadata.longitude, method="nearest"
+    )
+    # Keep only dimension coordinates: dynamical.org adds extras (valid_time,
+    # expected_forecast_length, spatial_ref, ...) that make chunks pulled with and
+    # without cloud cover impossible to concatenate.
+    return da.reset_coords(drop=True).assign_coords(
+        site_id=[str(s) for s in site_metadata.site_id.values]
+    )
+
+
+def _plain(da: xr.DataArray) -> xr.DataArray:
+    """Drop dynamical.org's variable/coordinate attrs (some are dicts, e.g.
+    ``statistics_approximate``, which netCDF can't serialize) before merging."""
+    da = da.copy()
+    da.attrs = {"units": "percent"}
+    for name in da.coords:
+        da[name].attrs = {}
+    return da
+
+
+def _fill_cloud_analysis(ds: xr.Dataset, site_metadata: xr.Dataset, email: str) -> xr.Dataset:
+    """Fill ``total_cloud_cover_atmosphere`` on a (time, site_id) stage3 pull from the
+    dynamical.org GEFS analysis (3-hourly; hours in between stay NaN, which the daily
+    aggregation and the inference-time interpolation both handle)."""
+    t0, t1 = ds.time.values.min(), ds.time.values.max()
+    cloud = _dynamical_cloud_points("analysis", email, site_metadata.sel(site_id=ds.site_id))
+    cloud = cloud.sel(time=slice(t0, t1)).load()
+    ds[CLOUD_VAR] = _plain(cloud.reindex(time=ds.time, site_id=ds.site_id).transpose(*ds[CLOUD_VAR].dims))
+    print(f"Filled {CLOUD_VAR} from the dynamical.org GEFS analysis "
+          f"({int(np.isfinite(cloud.values).sum())} values).")
+    return ds
+
+
+def _fill_cloud_operational(ds: xr.Dataset, site_metadata: xr.Dataset, email: str,
+                            max_workers: int = 8) -> xr.Dataset:
+    """Fill ``total_cloud_cover_atmosphere`` on a stage2 pull (init_time, lead_time,
+    ensemble_member, site_id) from the dynamical.org GEFS 35-day forecast for the same
+    00z init dates. The forecast is 3-hourly (6-hourly after day 10), so hourly leads
+    in between stay NaN; daily aggregation averages the available steps. Members are
+    matched by index, which is harmless since only the ensemble median/spread is used.
+    """
+    cloud = _dynamical_cloud_points("forecast-35-day", email, site_metadata.sel(site_id=ds.site_id))
+    cloud = cloud.sel(lead_time=slice(ds.lead_time.values.min(), ds.lead_time.values.max()))
+    available = set(pd.DatetimeIndex(cloud.init_time.values))
+    inits = [t for t in pd.DatetimeIndex(ds.init_time.values) if t in available]
+
+    def _load(t, attempts=4):
+        # dynamical.org reads occasionally drop mid-response (ContentLengthError);
+        # retry with a short backoff before giving up on this init date.
+        for attempt in range(attempts):
+            try:
+                return cloud.sel(init_time=t).load()
+            except Exception:
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(2 * (attempt + 1))
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        pieces = list(pool.map(_load, inits))
+    n_missing = ds.sizes["init_time"] - len(inits)
+    if n_missing:
+        print(f"WARNING: {n_missing} init date(s) missing from the dynamical.org forecast; "
+              f"{CLOUD_VAR} stays NaN for them.")
+    if pieces:
+        cloud = xr.concat(pieces, dim="init_time").assign_coords(
+            ensemble_member=lambda c: c.ensemble_member.astype(int)
+        )
+        ds[CLOUD_VAR] = _plain(cloud.reindex_like(ds[CLOUD_VAR]).transpose(*ds[CLOUD_VAR].dims))
+    print(f"Filled {CLOUD_VAR} from the dynamical.org GEFS 35-day forecast "
+          f"({len(inits)} init date(s)).")
+    return ds
+
+
+def _fill_cloud(ds, variables, cloud_cover_source, fill_fn, site_metadata, email,
+                required=False):
+    """Fill cloud cover from ``cloud_cover_source`` when requested.
+
+    On failure, ``required=False`` (operational forecasts) keeps the NaN placeholder,
+    handled downstream as an unavailable feature, and warns; ``required=True``
+    (training data pulls) re-raises so the caller retries instead of saving a gap.
+    """
+    if cloud_cover_source != "dynamical" or CLOUD_VAR not in variables:
+        return ds
+    try:
+        return fill_fn(ds, site_metadata, email)
+    except Exception as e:
+        if required:
+            raise
+        print(f"WARNING: could not fill {CLOUD_VAR} from dynamical.org "
+              f"({type(e).__name__}: {e}); leaving it NaN.")
+        return ds
 
 
 def pull_gefs_analysis_flare(
@@ -102,14 +218,21 @@ def pull_gefs_analysis_flare(
         variables: list,
         bucket: str = FLARE_BUCKET,
         endpoint: str = FLARE_ENDPOINT,
+        cloud_cover_source: str | None = None,
+        email: str = "optional@email.com",
+        cloud_cover_required: bool = False,
 ) -> xr.Dataset:
     """
     Retrieves historical GEFS met drivers from FLARE-forecast's stage3 parquet
     archive. Drop-in alternative to `dynamical_utils.pull_gefs_analysis`.
 
     Parameters mirror `dynamical_utils.pull_gefs_analysis`; `bucket`/`endpoint`
-    replace `base_url`/`email` since this reads parquet from S3 instead of zarr.
+    replace `base_url` since this reads parquet from S3 instead of zarr.
+    `cloud_cover_source="dynamical"` fills cloud cover from the dynamical.org GEFS
+    analysis (`email` is passed to dynamical.org for usage tracking).
+    `cloud_cover_required=True` raises if that fill fails instead of leaving NaN.
     """
+    filled_elsewhere = (CLOUD_VAR,) if cloud_cover_source == "dynamical" else ()
     fs = _s3_filesystem(endpoint)
     start_ts = pd.Timestamp(str(start_time), tz="UTC")
     end_ts = pd.Timestamp(str(end_time), tz="UTC") + pd.Timedelta(days=1)
@@ -140,13 +263,15 @@ def pull_gefs_analysis_flare(
 
         wide = df.pivot(index="datetime", columns="variable", values="prediction")
         wide.index.name = "time"
-        site_ds = _finalize_met_vars(xr.Dataset.from_dataframe(wide), variables)
+        site_ds = _finalize_met_vars(xr.Dataset.from_dataframe(wide), variables, filled_elsewhere)
         site_datasets.append(site_ds.expand_dims(site_id=[site_id]))
 
     if not site_datasets:
         raise RuntimeError("No FLARE stage3 met data found for any requested site_id.")
 
-    return xr.concat(site_datasets, dim="site_id")
+    ds = xr.concat(site_datasets, dim="site_id")
+    return _fill_cloud(ds, variables, cloud_cover_source, _fill_cloud_analysis, site_metadata, email,
+                       required=cloud_cover_required)
 
 
 def pull_gefs_operational_flare(
@@ -158,12 +283,19 @@ def pull_gefs_operational_flare(
         bucket: str = FLARE_BUCKET,
         endpoint: str = FLARE_ENDPOINT,
         max_workers: int = 8,
+        cloud_cover_source: str | None = None,
+        email: str = "optional@email.com",
+        cloud_cover_required: bool = False,
 ) -> xr.Dataset:
     """
     Retrieves ensemble GEFS forecast met drivers from FLARE-forecast's stage2
     parquet archive (one file per reference_datetime/site_id, 31 members).
     Drop-in alternative to `dynamical_utils.pull_gefs_operational`.
+    `cloud_cover_source="dynamical"` fills cloud cover from the dynamical.org GEFS
+    35-day forecast for the same init dates. `cloud_cover_required=True` raises if
+    that fill fails instead of leaving NaN.
     """
+    filled_elsewhere = (CLOUD_VAR,) if cloud_cover_source == "dynamical" else ()
     fs = _s3_filesystem(endpoint)
     lead_time_limit = pd.Timedelta(lead_times)
     ref_dates = pd.date_range(str(start_time), str(end_time), freq="1D", tz="UTC")
@@ -207,13 +339,15 @@ def pull_gefs_operational_flare(
         wide = df.pivot(index=["init_time", "lead_time", "parameter"], columns="variable", values="prediction")
         site_ds = xr.Dataset.from_dataframe(wide).rename({"parameter": "ensemble_member"})
         site_ds = site_ds.assign_coords(ensemble_member=site_ds.ensemble_member.astype(int))
-        site_ds = _finalize_met_vars(site_ds, variables)
+        site_ds = _finalize_met_vars(site_ds, variables, filled_elsewhere)
         site_datasets.append(site_ds.expand_dims(site_id=[site_id]))
 
     if not site_datasets:
         raise RuntimeError("No FLARE stage2 forecast data found for any requested site_id.")
 
-    return xr.concat(site_datasets, dim="site_id")
+    ds = xr.concat(site_datasets, dim="site_id")
+    return _fill_cloud(ds, variables, cloud_cover_source, _fill_cloud_operational, site_metadata, email,
+                       required=cloud_cover_required)
 
 
 def pull_gefs_operational_from_stage3(
